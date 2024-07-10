@@ -1,0 +1,2 @@
+"trial_type","trial_index","time_elapsed","internal_node_id","task_version","subject_id","assigned_condition","age","gender","browser_interaction"
+"pavlovia","0","1771","0.0-0.0","spark_pilot_norest","9147","5","8","Male","[{""event"":""blur"",""trial"":1,""time"":149190},{""event"":""focus"",""trial"":1,""time"":149193}]"

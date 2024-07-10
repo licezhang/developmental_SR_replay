@@ -1,0 +1,113 @@
+@import "~jspsych/css/jspsych.css";
+
+
+/* Dot waiting game styles */
+.field {
+  height: 450px;
+  width: 700px;
+  background-color: #F8F8F8;
+  border: .5px solid rgba(130, 130, 130, 0.5);
+  position: relative;
+  overflow-y: hidden;
+}
+.dot {
+  background-color: red;
+  height: 100px;
+  width: 100px;
+  border: .5px solid rgba(130, 130, 130, 0.5);
+  opacity: 0.8;
+  border-radius: 50%;
+  position: absolute;
+}
+
+
+/* Revaluation task styles */
+.arrow {
+  height: 90px; 
+  width: 90px;
+  margin: 25px;
+  background-color: white;
+  display: block;
+  &.selected {
+    background-color: gold;
+    border-radius: 15px;
+  }
+  &.unselected {
+    opacity: 0.4;
+  }
+}
+.image {
+  width: 350px;
+  height: 350px;
+  border: 8px solid black;
+}
+.reward {
+  font-size: 140px;
+  color: black;
+  font-weight: bold;
+  margin: 50
+  px;
+}
+.treasure {
+  width: 420px;
+}
+.caughtRobber {
+  height: 350px;
+}
+.flexBox{ 
+  display: flex;
+  align-items: center;
+}
+
+
+/* Instructions Styling */
+.learning-instructions-text {
+  width: 60vw;
+  font-size: 20px;
+  line-height: 1.5;
+  margin-bottom: 70px;
+}
+.learning-instructions-button {
+  position: absolute; 
+  bottom: 70px; 
+  left: 50%;
+  transform: translate(-50%, 0);
+}
+.instructions-btn{
+  font-size: 16px;
+  border-radius: 8px;
+  background-color: white;
+  padding: 8px 12px;
+  border: 1px solid grey
+}
+.instructions-btn[text="Start"] {
+  background-color: gold;
+  font-weight: bold;
+}
+.instructions-image {
+  height: 225px; 
+  margin-top: 20px;
+  max-width: 100%
+}
+
+
+/* Memory styling */
+.mem-choice-grid {
+  display: grid;
+  grid-template-columns: 25% 25% 25% 25%;
+  width: 60vw;
+  margin-top: 50px;
+}
+.choice-option-img{
+  width: 120px;
+  height: 120px;
+  border: 5px dashed transparent;
+  border-radius: 3px;
+}
+.choice-option-img[stage="selected"]  {
+  border-color: grey;
+}
+.choice-option-img[stage="not selected"]  {
+  opacity: 10%;
+}
+
