@@ -1,0 +1,378 @@
+---
+title: "sailing_analysis"
+output: html_document
+date: "2023-12-14"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+suppressWarnings(TRUE)
+library(readr)
+library(ggh4x)
+library(afex)
+library(Rmisc)
+library(dplyr)
+library(kableExtra)
+library(tidyr)
+library(ggplot2)
+library(reshape2)
+library(sjPlot)
+```
+
+## Overview
+**Full sailing task data from 8-25 year olds.**
+
+## Data Quality and Demographics
+Participants with >20 browser interactions, >3 comprehension errors, >10 timeouts, or mean RT >5000ms are excluded from analysis after this step
+
+```{r data cleaning}
+data_qual <- read_csv("../data/sailing/preprocessed/data_quality.csv")
+data_qual <- melt(data_qual[,-1], id = c("categorical_age","excluded"))
+cutoff_values <- data.frame(variable = unique(data_qual$variable), cutoff = c(20, 10, 5000, 3))  # Add your cutoff 
+ggplot(data_qual,aes(x = value, fill = categorical_age)) + 
+    facet_wrap(~variable,scales = "free_x") + 
+    geom_histogram() + 
+    geom_vline(data = cutoff_values, aes(xintercept = cutoff), linetype = "dashed", color = "red")
+```
+
+## Full Dataset 
+
+Reading in preprocessed dataset. Each row represents a traversal trial and its preceeding boat-only trial. \
+
+* **action1TowardsPrevEnd** (1 or 0; 1 corresponds to taking action1 towards island containing prior boat; 0 is other island).   \
+* **prior_reward** (1 or 0; 1 corresponds to reward on prior boat trial). \
+* **boat_neighbor_prior_reward** (1 or 0, corresponds to reward when the neighbor to the prior boat was last seen in traversal or boat-only).  \
+* **prior_boat_choice** (1 or 0, 1 if prior boat was chosen on last visit to its island).   \
+
+
+```{r read main dataset}
+data <- read_csv("../data/sailing/preprocessed/data.csv")
+scale_this <- function(x){
+  (x - mean(x, na.rm=TRUE)) / sd(x, na.rm=TRUE)
+}
+data$boat_neighbor_prior_reward <- scale_this(data$boat_neighbor_prior_reward)
+data$prior_boat_choice <- scale_this(data$prior_boat_choice)
+data$prior_reward <- scale_this(data$prior_reward)
+data$prior_island_reward <- scale_this(data$prior_island_reward)
+data$block_change_congruent <- scale_this(data$block_change_congruent)
+data$sub <- factor(data$sub)
+data$age <- scale_this(data$age)
+
+data$categorical_age <- factor(data$categorical_age, levels = c('Children', 'Adolescents', 'Adults'))
+```
+
+```{r define model functions, include=FALSE}
+my_tab_model <- function(model){
+  tab_model(model, 
+          df.method = "wald",
+          show.stat=TRUE,
+          CSS = list(css.tdata = 'padding:0.1cm;padding-left:0.2cm;padding-right:0.2cm;'),
+          transform = NULL,
+          string.stat = "z",
+          string.p = "p > |z|",
+          show.re.var = FALSE,
+          show.icc = FALSE,
+          show.r2 = FALSE,
+          wrap.labels = 100,
+          show.ngroups = FALSE,
+          show.obs = FALSE)
+}
+
+my_plot_model <- function(model){
+  plot_model(model, 
+          show.intercept = T,
+          value.offset = 0.35,
+          transform = NULL,
+          show.values = T,) + 
+  geom_hline(yintercept = 0, linetype = "dashed", alpha = .5)
+}
+```
+
+## Regressions 
+
+**Reward-only Model** \
+
+* Significant effect of **prior_reward** would suggest influence of prior boat trial on behavior in a model-based or SR-dependent manner
+
+```{r reward_only model new}
+reward_only <- glmer(action1TowardsPrevEnd ~ prior_reward * age + (prior_reward | sub), 
+                     data = data, 
+                     family = binomial, 
+                     control = glmerControl(optimizer = "bobyqa", optCtrl=list(maxfun=1e6)))
+my_tab_model(reward_only)
+```
+
+```{r reward_only model, cache=TRUE}
+reward_only <- mixed(action1TowardsPrevEnd ~ prior_reward * age + (prior_reward | sub), 
+                        data=data, family = binomial, method="LRT")
+tab_model(reward_only,
+          df.method = "kenward",
+          show.stat=TRUE)
+plot_model(reward_only,  
+          show.intercept = T,
+          transform = NULL,
+          show.est = T, 
+          show.se = T, 
+          show.stat = T,
+          show.values = T,
+          show.p = T) +
+  geom_hline(yintercept = 0, linetype = "dashed", alpha = .5)
+```
+
+**SR MB Interaction Model** \
+
+* Significant effect of **prior_reward** would suggest influence of prior boat trial on behavior in a model-based or SR-dependent manner. \
+* Significant **prior_boat_choice * prior_reward** interaction indicates SR-dependent behavior, while **prior_reward * boat_neighbor_prior_reward** interaction indicates MB-behavior. \\
+
+```{r model-based/sr model new, cache=TRUE}
+mb_sr <- glmer(action1TowardsPrevEnd ~ prior_reward * boat_neighbor_prior_reward * prior_boat_choice * age + (prior_reward * boat_neighbor_prior_reward * prior_boat_choice | sub), 
+                     data = data, 
+                     family = binomial, 
+                     control = glmerControl(optimizer = "bobyqa", optCtrl=list(maxfun=1e6)))
+my_tab_model(mb_sr)
+```
+
+```{r model-based/sr model, cache=TRUE}
+mb_sr <- mixed(action1TowardsPrevEnd ~ prior_reward * boat_neighbor_prior_reward * prior_boat_choice * age + (prior_reward * boat_neighbor_prior_reward * prior_boat_choice || sub),
+               data = data, 
+               family = binomial, 
+               method="LRT",
+               expand_re = T)
+```
+
+```{r model-based/sr model results}
+tab_model(mb_sr,
+          df.method = "kenward",
+          show.stat=TRUE)
+```
+```{r model-based/sr model plot, fig.height = 7, fig.width=8}
+plot_model(mb_sr,  
+          show.intercept = T,
+          transform = NULL,
+          show.est = T, 
+          show.se = T, 
+          show.stat = T,
+          show.values = T,
+          value.offset = 0.35,
+          show.p = T) +
+  geom_hline(yintercept = 0, linetype = "dashed", alpha = .5)
+```
+
+**SR MB Interaction Model with Block Type** \
+
+* SR MB model with additional term and its interactions 
+* **block_change_congruent** (1 or 0; 1 for all trials in a block following congruent block-change, 0 otherwise). \
+
+```{r model-based/sr model with blocks, cache=TRUE}
+mb_sr_block <- mixed(action1TowardsPrevEnd ~ prior_reward * boat_neighbor_prior_reward * prior_boat_choice * age * block_change_congruent + (prior_reward * boat_neighbor_prior_reward * prior_boat_choice * block_change_congruent || sub),
+               data = data, 
+               family = binomial, 
+               method="LRT",
+               expand_re = T)
+```
+
+```{r model-based/sr model with blocks results}
+tab_model(mb_sr_block,
+          df.method = "kenward",
+          show.stat=TRUE)
+```
+
+```{r model-based/sr model with blocks plot, fig.height = 12, fig.width=8}
+plot_model(mb_sr_block,  
+          show.intercept = T,
+          transform = NULL,
+          show.est = T, 
+          show.se = T, 
+          show.stat = T,
+          show.values = T,
+          value.offset = 0.4,
+          show.p = T) +
+  geom_hline(yintercept = 0, linetype = "dashed", alpha = .5)
+```
+
+**Win-Stay-Lose-Shift Model** \
+
+* **prior_island_reward** is coded as 1 if they received a reward on the prior island and 0 if they did not.
+* **repeat island** is 1 if they repeated the same island as on the previous traversal trial,
+
+```{r win-stay-lose-shift model, cache=TRUE}
+wslf <- mixed(repeat_island ~ prior_island_reward * age + (prior_island_reward|sub), data=data, family = binomial, method="LRT")
+tab_model(wslf,
+          df.method = "kenward",
+          show.stat=TRUE)
+plot_model(wslf,  
+          show.intercept = T,
+          transform = NULL,
+          show.est = T, 
+          show.se = T, 
+          show.stat = T,
+          show.values = T,
+          show.p = T) +
+  geom_hline(yintercept = 0, linetype = "dashed", alpha = .5)
+```
+
+``` {r recoding variables}
+# changing variables to be factors for plotting
+data$prior_reward <- factor(data$prior_reward, labels=c("No Reward","Reward"))
+data$boat_neighbor_prior_reward <- factor(data$boat_neighbor_prior_reward, labels=c("No Reward","Reward"))
+data$prior_boat_choice <- factor(data$prior_boat_choice, labels=c("Neighboring","Observed"))
+data$prior_island_reward <- factor(data$prior_island_reward, labels=c("No Reward","Reward"))
+data$block_change_congruent <- factor(data$block_change_congruent, labels=c("Incongruent","Congruent"))
+```
+
+```{r wslf plot}
+wslf_per_sub <- summarySE(data, measurevar="repeat_island",
+                        groupvars=c("prior_island_reward","sub","categorical_age"))
+wslf_summary <- summarySE(wslf_per_sub, measurevar="repeat_island",
+                        groupvars=c("prior_island_reward","categorical_age"))
+wslf_summary$categorical_age <- factor(wslf_summary$categorical_age, levels = c('Children', 'Adolescents', 'Adults'))
+
+ggplot(wslf_summary, aes(x=prior_island_reward,y=repeat_island, fill=prior_island_reward)) +
+  geom_bar(stat = "identity",position="dodge") +
+  geom_errorbar(aes(ymax = repeat_island + se, ymin = repeat_island - se), position=position_dodge(width = 0.9), width = 0.2)  +
+  facet_wrap(~ categorical_age, scales = "free") +
+  scale_fill_discrete(name = "Prior Island Reward") +
+  labs(title = "Win-Stay Lose-Shift By Age",
+       x = "Prior Island Reward",
+       y = "Prob. of Repeating Island Choice")
+```
+
+## Plots
+
+Original figures from paper demonstacting MB-SR interaction effects along with quick recreations. 
+
+![](images/model_based.png){width=50%}
+![](images/sr.png){width=50%}
+
+```{r MB Effect}
+summary_data <- summarySE(data, measurevar="action1TowardsPrevEnd",
+                        groupvars=c("boat_neighbor_prior_reward","prior_reward","sub"))
+summary_data <- summarySE(summary_data, measurevar="action1TowardsPrevEnd",
+                        groupvars=c("boat_neighbor_prior_reward","prior_reward"))
+
+ggplot(summary_data, aes(x = boat_neighbor_prior_reward, y = action1TowardsPrevEnd, fill = factor(prior_reward))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_errorbar(aes(ymin = action1TowardsPrevEnd - se, ymax = action1TowardsPrevEnd + se), 
+                position = position_dodge(width = 0.9), width = 0.25) +
+  labs(title = "Interaction Between Neighbor and Reward (MB Effect)",
+       x = "Boat Neighbor Last Reward",
+       y = "Prob. of Choosing Sampled Island") +
+  scale_fill_discrete(name = "Boat Trial Reward") +
+  theme_minimal()
+```
+
+```{r SR Effect}
+summary_data <- summarySE(data, measurevar="action1TowardsPrevEnd",
+                        groupvars=c("prior_boat_choice","prior_reward","sub"))
+summary_data <- summarySE(summary_data, measurevar="action1TowardsPrevEnd",
+                        groupvars=c("prior_boat_choice","prior_reward"))
+
+ggplot(summary_data, aes(x = prior_boat_choice, y = action1TowardsPrevEnd, fill = factor(prior_reward))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_errorbar(aes(ymin = action1TowardsPrevEnd - se, ymax = action1TowardsPrevEnd + se), 
+                position = position_dodge(width = 0.9), width = 0.25) +
+  labs(title = "Interaction Between Policy and Reward (SR effect)",
+       x = "Last Boat Choice",
+       y = "Prob. of Choosing Sampled Island") +
+  scale_fill_discrete(name = "Boat Trial Reward") +
+  theme_minimal() + 
+  scale_x_discrete(limits=rev)
+```
+
+``` {r plot mb by age}
+summary_data <- summarySE(data, measurevar="action1TowardsPrevEnd",
+                        groupvars=c("boat_neighbor_prior_reward","prior_reward","sub","categorical_age"))
+summary_data <- summarySE(data, measurevar="action1TowardsPrevEnd",
+                        groupvars=c("boat_neighbor_prior_reward","prior_reward","categorical_age"))
+
+ggplot(summary_data, aes(x = boat_neighbor_prior_reward, y = action1TowardsPrevEnd, fill = prior_reward)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_errorbar(aes(ymin = action1TowardsPrevEnd - se, ymax = action1TowardsPrevEnd + se), 
+                position = position_dodge(width = 0.9), width = 0.25) +
+  labs(title = "Interaction Between Neighbor and Reward (MB Effect) Per Age Group",
+       x = "Boat Neighbor Last Reward",
+       y = "Prob. of Choosing Sampled Island") +
+  scale_fill_discrete(name = "Boat Trial Reward") +
+  facet_wrap(~ categorical_age, scales = "free") +
+  theme_minimal()
+```
+
+``` {r plot sr by age}
+summary_data <- summarySE(data, measurevar="action1TowardsPrevEnd",
+                        groupvars=c("prior_boat_choice","prior_reward","sub","categorical_age"))
+summary_data <- summarySE(data, measurevar="action1TowardsPrevEnd",
+                        groupvars=c("prior_boat_choice","prior_reward","categorical_age"))
+
+ggplot(summary_data, aes(x = prior_boat_choice, y = action1TowardsPrevEnd, fill = prior_reward)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_errorbar(aes(ymin = action1TowardsPrevEnd - se, ymax = action1TowardsPrevEnd + se), 
+                position = position_dodge(width = 0.9), width = 0.25) +
+  labs(title = "Interaction Between Policy and Reward (SR Effect) Per Age Group",
+       x = "Last Boat Choice",
+       y = "Prob. of Choosing Sampled Island") +
+  scale_fill_discrete(name = "Boat Trial Reward") +
+  facet_wrap(~ categorical_age, scales = "free") +
+  theme_minimal() + 
+  scale_x_discrete(limits=rev)
+```
+
+** Plots to visualize interaction effects from SR-MB + Block Type model. **
+
+``` {r plot neighbor x prior choice interaction by age, fig.width=8}
+summary_data <- summarySE(data, measurevar="action1TowardsPrevEnd",
+                        groupvars=c("prior_boat_choice","boat_neighbor_prior_reward","sub","categorical_age"))
+summary_data <- summarySE(data, measurevar="action1TowardsPrevEnd",
+                        groupvars=c("prior_boat_choice","boat_neighbor_prior_reward","categorical_age"))
+
+ggplot(summary_data, aes(x = prior_boat_choice, y = action1TowardsPrevEnd, fill = boat_neighbor_prior_reward)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_errorbar(aes(ymin = action1TowardsPrevEnd - se, ymax = action1TowardsPrevEnd + se), 
+                position = position_dodge(width = 0.9), width = 0.25) +
+  labs(title = "Interaction Between Policy and Neighbor Per Age Group",
+       x = "Last Boat Choice",
+       y = "Prob. of Choosing Sampled Island") +
+  scale_fill_manual(name = "Boat Neighbor Prior Reward", values=c("brown","darkcyan")) +
+  facet_wrap(~ categorical_age, scales = "free") +
+  theme_minimal() + 
+  scale_x_discrete(limits=rev)
+```
+
+``` {r plot sr by block_change}
+summary_data <- summarySE(data, measurevar="action1TowardsPrevEnd",
+                        groupvars=c("prior_boat_choice","prior_reward","sub","block_change_congruent"))
+summary_data <- summarySE(data, measurevar="action1TowardsPrevEnd",
+                        groupvars=c("prior_boat_choice","prior_reward","block_change_congruent"))
+summary_data <- drop_na(summary_data)
+summary_data$prior_boat_choice <- factor(summary_data$prior_boat_choice, levels = c("Observed", "Neighboring"))
+ggplot(summary_data, aes(x = prior_boat_choice, y = action1TowardsPrevEnd, fill = prior_reward)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_errorbar(aes(ymin = action1TowardsPrevEnd - se, ymax = action1TowardsPrevEnd + se), 
+                position = position_dodge(width = 0.9), width = 0.25) +
+  labs(title = "Interaction Between Policy and Reward (SR Effect) by Block Change Type",
+       x = "Last Boat Choice",
+       y = "Prob. of Choosing Sampled Island") +
+  scale_fill_discrete(name = "Boat Trial Reward") +
+  facet_wrap(~ block_change_congruent, scales = "free") +
+  theme_minimal() 
+  scale_x_discrete(limits=rev)
+```
+
+``` {r plot interaction between boat_neighbor_prior_reward and block_change}
+summary_data <- summarySE(data, measurevar="action1TowardsPrevEnd",
+                        groupvars=c("boat_neighbor_prior_reward","sub","block_change_congruent"))
+summary_data <- summarySE(data, measurevar="action1TowardsPrevEnd",
+                        groupvars=c("boat_neighbor_prior_reward","block_change_congruent"))
+summary_data <- drop_na(summary_data)
+
+ggplot(summary_data, aes(x = boat_neighbor_prior_reward, y = action1TowardsPrevEnd, fill=boat_neighbor_prior_reward)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_errorbar(aes(ymin = action1TowardsPrevEnd - se, ymax = action1TowardsPrevEnd + se), 
+                position = position_dodge(width = 0.9), width = 0.25) +
+  labs(title = "Effect of Interaction Between Boat Neighbor and Block Type on Island Choice",
+       x = "Boat Neighbor Prior Reward",
+       y = "Prob. of Choosing Sampled Island") +
+  scale_fill_manual(name = "Boat Neighbor Prior Reward", values=c("brown","darkcyan")) +
+  facet_wrap(~ block_change_congruent, scales = "free") +
+  theme_minimal() 
+  scale_x_discrete(limits=rev)
+```

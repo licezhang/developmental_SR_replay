@@ -1,0 +1,4 @@
+"trial_type","trial_index","time_elapsed","internal_node_id","value","metadata","browser_interaction","low_quality","success","timeout","failed_images","failed_audio","failed_video"
+"pavlovia","0","12","0.0-0.0","","","","","","","","",""
+"call-function","1","13","0.0-1.0","","{""task_version"":""sr_pilot_v2"",""task_condition"":""good"",""boats"":[""B"",""D"",""A"",""C""],""boats_demo"":[""E"",""G"",""F"",""H""],""islands"":[""A"",""B""],""subject_id"":""13982"",""age"":""19"",""gender"":""Female""}","[{""event"":""focus"",""trial"":2,""time"":3055}]","false","","","","",""
+"preload","2","5661","0.0-2.0","","","[{""event"":""focus"",""trial"":2,""time"":3055},{""event"":""blur"",""trial"":3,""time"":8196}]","false","true","false","[]","[]","[]"
