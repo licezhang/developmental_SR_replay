@@ -51,6 +51,10 @@ const info = {
       type: ParameterType.STRING, 
       default: "",
     },
+    audioStim: {
+      type: ParameterType.STRING, 
+      default: "",
+    },
   },
 };
 

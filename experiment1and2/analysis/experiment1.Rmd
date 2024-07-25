@@ -13,6 +13,7 @@ library(Rmisc)
 library(dplyr)
 library(sjPlot)
 library(tidyr)
+library(ggh4x)
 library(pROC)
 ```
 
@@ -188,7 +189,7 @@ ggsave("figures/experiment1_relearning.png")
 
 ## Replanning: do participants update their first-stage choices based on re-learning?
 ```{r revaluation 1}
-reval_mod <- lm(reval_score ~  age_z * block_condition,
+reval_mod <- lm(reval_score ~  age_z * block_condition * second_stage_test,
                    data=data,
                    contrasts = list(block_condition="contr.sum"))
 my_tab_model(reval_mod)
@@ -223,13 +224,16 @@ ggsave("figures/experiment1_revaluation.png")
 
 **Did participants learn from direct experience to make accurate second-stage choices at test?**
 ```{r second stage test model}
-second_stage_test_mod <- lm(second_stage_accuracy ~ age_z * block_condition,
+summary_data <- summarySE(data, measurevar="second_stage_test",
+                        groupvars=c("block_condition"))
+summary_data
+
+second_stage_test_mod <- lm(second_stage_test ~ age_z * block_condition,
                    data=data,
                    contrasts = list(block_condition="contr.sum"))
 my_tab_model(second_stage_test_mod)
-# second_stage_accuracy ~ age_z * block_condition + (1|subject_id) ===> isSingular
+# second_stage_test ~ age_z * block_condition + (1|subject_id) ===> isSingular
 ```
-
 
 ## Supplemental Models
 Modeling learning performance broken down by choice stage (first vs second)
@@ -283,11 +287,11 @@ reval_mod <- lm(reval_score ~  age_z * block_condition * block_order,
 my_tab_model(reval_mod)
 # reval_score ~  age_z * block_condition * block_order + (1|subject_id) ===> isSingular
 
-second_stage_test_mod <- lm(second_stage_accuracy ~ age_z * block_order * block_condition,
+second_stage_test_mod <- lm(second_stage_test ~ age_z * block_order * block_condition,
                    data=data,
                    contrasts = list(block_condition="contr.sum"))
 my_tab_model(second_stage_test_mod)
-# second_stage_accuracy ~ age_z * block_order * block_condition + (1|subject_id) ===> isSingular
+# second_stage_test ~ age_z * block_order * block_condition + (1|subject_id) ===> isSingular
 ```
 
 ```{r block order revaluation interaction effect plot}
@@ -304,13 +308,13 @@ ggplot(means, aes(x=block_order,y=reval_score, fill=block_condition)) +
 ```
 
 ```{r block order interaction 2nd stage test plot}
-subj_means <- summarySE(data, measurevar="second_stage_accuracy", groupvars=c("block_condition","block_order","subject_id"))
-means <- summarySE(subj_means, measurevar="second_stage_accuracy", groupvars=c("block_condition","block_order"))
+subj_means <- summarySE(data, measurevar="second_stage_test", groupvars=c("block_condition","block_order","subject_id"))
+means <- summarySE(subj_means, measurevar="second_stage_test", groupvars=c("block_condition","block_order"))
 means$block_order <- factor(means$block_order, labels=c("First","Second"))
 
-ggplot(means, aes(x=block_order,y=second_stage_accuracy, fill=block_condition)) +
+ggplot(means, aes(x=block_order,y=second_stage_test, fill=block_condition)) +
   geom_bar(stat = "identity",position="dodge") +
-  geom_errorbar(aes(ymin = second_stage_accuracy - se, ymax = second_stage_accuracy + se), position = position_dodge(width = 0.9), width = 0.25) 
+  geom_errorbar(aes(ymin = second_stage_test - se, ymax = second_stage_test + se), position = position_dodge(width = 0.9), width = 0.25) 
 ```
 
 Memory: does memory for first-stage stimuli relate to replanning behavior
@@ -338,21 +342,4 @@ memory_mod_block_order <- lmer(memory_auc ~  age_z * block_order * block_conditi
                    control = lmerControl(optimizer = "bobyqa", optCtrl=list(maxfun=1e6)),
                    contrasts = list(block_condition="contr.sum",environment="contr.sum"))
 my_tab_model(memory_mod_block_order)
-```
-
-```{r plot testing}
-library(ggpmisc)
-
-ggplot(data[data$block_condition == "Revaluation", ], aes(y=reval_single_rt, x=reval_score, color=categorical_age)) +
-  geom_point() +
-  stat_poly_line() +
-  stat_poly_eq(use_label(c("eq", "R2"))) +
-  #stat_smooth(aes(y=rt0, x=reval_score, color=categorical_age),method='lm', alpha=0.2) +
-  ylim(0, 3000)
-
-rt_mod <- lmer(rt0 ~ age_z * reval_score + (1 |subject_id), 
-                  data=data,
-                  control = lmerControl(optimizer = "bobyqa", optCtrl=list(maxfun=1e6)),
-                  contrasts = list(block_condition="contr.sum"))
-my_tab_model(learning_mod_2)
 ```

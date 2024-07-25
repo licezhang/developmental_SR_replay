@@ -21,6 +21,7 @@ import CompQPlugin from "./plugins/comp-q-plugin";
 import MemoryPlugin from "./plugins/memory-plugin";
 import JspsychCallFunction from '@jspsych/plugin-call-function'
 import jsPsychPavlovia from  "./plugins/pavlovia";
+import HtmlSliderResponse from "@jspsych/plugin-html-slider-response";
 
 import * as constants from './constants/experiment-constants';
 import * as instructions from './constants/instruction-constants';
@@ -36,11 +37,12 @@ export async function run({ assetPaths }) {
     auto_update_progress_bar: false,
     on_trial_start: function (data) {
       jsPsych.data.get().addToAll({ 
-        task_version: 'spark_pilot_norest', 
+        task_version: 'pilot_wm_v1', 
         subject_id: constants.subjectId,
         assigned_condition: constants.condition,
         age: constants.age,
-        gender: constants.gender
+        gender: constants.gender,
+        rest: constants.rest,
       });
     },
     on_trial_finish: function (data) {
@@ -60,7 +62,7 @@ export async function run({ assetPaths }) {
     }
   });
 
-  /*const pavlovia_init = {
+  var pavlovia_init = {
     type: jsPsychPavlovia,
     command: "init"
   }
@@ -68,7 +70,7 @@ export async function run({ assetPaths }) {
   var pavlovia_finish = {
     type: jsPsychPavlovia,
     command: "finish"
-  };*/
+  };
 
   const preload = {
     type: PreloadPlugin,
@@ -267,6 +269,81 @@ export async function run({ assetPaths }) {
     timeline_variables: constants.practiceTimelineVariables['catch']
   }
 
+  const beep_listening_trial = {
+    type: AudioButtonResponse,
+    stimulus: jsPsych.timelineVariable('audio_stim'),
+    prompt: `Listen for the beeps!`,
+    choices: [],
+    trial_ends_after_audio: true,
+    response_ends_trial: false,
+  }
+
+  var total_beeps = 0
+  const beep_chest_trial = {
+    type: HtmlSliderResponse,
+    stimulus: `<div style="width:500px;">
+        <p>What is the password?</p>
+        <img src='./assets/img/instructions/beep_chest.jpg' class='instructions-image'>`,
+    require_movement: true,
+    max: 16,
+     // generate array of strings 0 through 24 for slider labels
+    labels: Array.from({length: 17}, (_, i) => i.toString()),
+    on_finish: function(data) {
+      data.correct = data.response == total_beeps
+      data.answer = total_beeps
+      data.error = Math.abs(data.response - total_beeps)
+      total_beeps = 0
+    },
+    data: { task_part: 'beep chest' }
+  };
+
+  const beep_answer = {
+    type: CompQPlugin,
+    stimulus: function () {
+      var last_trial_correct = jsPsych.data.get().last(1).values()[0].response == jsPsych.timelineVariable('beeps');
+      if (last_trial_correct) {
+        return jsPsych.timelineVariable('right_response', true)
+      } else {
+        return jsPsych.timelineVariable('wrong_response', true)
+      }
+    },
+    audio_stim: function () {
+      var last_trial_correct = jsPsych.data.get().last(1).values()[0].response == jsPsych.timelineVariable('beeps');
+      if (last_trial_correct) {
+        return jsPsych.timelineVariable('right_audio', true)
+      } else {
+        return jsPsych.timelineVariable('wrong_audio', true)
+      }
+    },
+    choices: ['Next'],
+    data: { task_part: 'beep answer' },
+  }; 
+
+  // repeat beep chest trial if answer is incorrect
+  const beep_practice  = (beep_timeline) => ({
+    timeline: [{
+      timeline: [beep_listening_trial, beep_chest_trial, beep_answer],
+      loop_function: function(data) {
+        var last_trial_correct = jsPsych.data.get().last(2).values()[0].response == jsPsych.timelineVariable('beeps');
+        if(last_trial_correct){return false;}
+        else {return true;}
+        },
+    }],
+    timeline_variables: beep_timeline,
+  })
+
+  var beep_report_conditional = {
+    timeline: [beep_chest_trial],
+    conditional_function: function() {
+      if (trial_num % 4 == 0 && trial_num != 0) {
+        // if the trial count is divisible by 4, ask participant to report number of beeps
+        return true;
+      } else {
+        return false;
+      }
+    }
+  }  
+
   const rest_practice = {
     timeline: [{
       type: RestPlugin,
@@ -297,14 +374,30 @@ export async function run({ assetPaths }) {
           startState: jsPsych.timelineVariable('startState'),
           rewardMap: constants.instructionRewardMap,
           environment: jsPsych.timelineVariable('environment'),
-          data: { task_part: 'practice block' }
-        }, fixation],
-        timeline_variables: constants.secondStageStartStates(2),
+          audioStim: jsPsych.timelineVariable('audioStim'),
+          data: { task_part: 'practice block' },
+          on_finish: function (data) {
+            data.trial_num = trial_num
+            trial_num += 1;
+            total_beeps += parseInt(data.audioStim.slice(-1))
+          },
+        }, fixation, beep_report_conditional],
+        timeline_variables: constants.secondStageStartStates(2).map((x,i) => ({...x, "audioStim": [constants.practiceBeepAudio[i]]})),
         randomize_order: true,
+        on_timeline_finish: function() {
+          trial_num = 0;
+        },
       },
       // comment out next two lines for Experiment 2 with no rest phase
-      instructions_block(instructions.short_rest_instructions), 
-      rest_practice, 
+      {
+        timeline:[
+          instructions_block(instructions.short_rest_instructions), 
+          rest_practice
+        ],
+        conditional_function: function(){
+          return constants.rest
+        }
+      }, 
       instructions_block(instructions.first_test_instructions), 
       countdown,
       {
@@ -347,9 +440,19 @@ export async function run({ assetPaths }) {
       full_practice,
       instructions_block(instructions.catch_practice),
       catch_practice,
+      instructions_block(instructions.beep_practice_instructions),
+      beep_practice(instructions.beep_practice),
+      instructions_block(instructions.beep_practice_complete),
       // comment out next two lines for Experiment 2 with no rest phase
-      instructions_block(instructions.initial_rest),
-      rest_practice,
+      {
+        timeline: [
+          instructions_block(instructions.initial_rest),
+          rest_practice,
+        ],
+        conditional_function: function(){
+          return constants.rest
+        }
+      }, 
       practice_block,
       instructions_block(instructions.task_comprehension_instructions),
       comprehension_block(instructions.task_comprehension),
@@ -381,29 +484,32 @@ export async function run({ assetPaths }) {
     },
     on_timeline_finish: function() {
       trial_num = 0;
-      env = constants.stimuliOrder[1]  // because jspsych is horrible
+      env = constants.stimuliOrder[1]  
     },
   }
 
   /* Only stage two decisions beginning randomly at a given animal */
   const revaluation = {
-    timeline: [{
+    timeline: [ 
+      {
         type: RevaluationPlugin,
         startState: jsPsych.timelineVariable('startState'),
         rewardMap: jsPsych.timelineVariable('rewardMapRevaluation'),
         environment: jsPsych.timelineVariable('environment'),
+        audioStim: jsPsych.timelineVariable('audioStim'),
         data: { 
           task_part: 'revaluation', 
           condition: jsPsych.timelineVariable('condition'),
           order: jsPsych.timelineVariable('order'),
-        }
-    }, fixation],
-    timeline_variables: constants.secondStageStartStates(constants.revaluationNumber),
+        },
+        on_finish: function (data) {
+          data.trial_num = trial_num
+          trial_num += 1;
+          total_beeps += parseInt(data.audioStim.slice(-1))
+        },
+    }, fixation, beep_report_conditional],
+    timeline_variables: constants.secondStageStartStates(constants.revaluationNumber).map((x,i) => ({...x, "audioStim": constants.beepAudio[i]})),
     randomize_order: true,
-    on_finish: function (data) {
-      data.trial_num = trial_num
-      trial_num += 1;
-    },
     on_timeline_finish: function() {
       trial_num = 0;
     },
@@ -451,14 +557,21 @@ export async function run({ assetPaths }) {
   /* Two task blocks with different environments and reward values, one revaluation and one control */
   const revaluation_and_control_task = {
     timeline: [
-      /*instructions_block(instructions.transitions_instructions), 
+      instructions_block(instructions.transitions_instructions), 
       instructions_block(instructions.value_instructions), 
-      value_training, */
+      value_training, 
       instructions_block(instructions.revaluation_instructions),
       revaluation, 
       // comment out next two lines for Experiment 2 with no rest phase
-      instructions_block(instructions.rest_instructions), 
-      rest, 
+      { 
+        timeline: [
+          instructions_block(instructions.rest_instructions), 
+          rest, 
+        ],
+        conditional_function: function(){
+          return constants.rest
+        }
+      }, 
       instructions_block(instructions.first_test_instructions), 
       countdown,
       first_stage_test, 
@@ -540,7 +653,6 @@ export async function run({ assetPaths }) {
     }
   }
   
-
   const is_Safari = /Version\/.*Safari\//.test(navigator.userAgent) && !window.MSStream;
   const safari_is_bad = {
     type: JspsychCallFunction,
@@ -564,15 +676,15 @@ export async function run({ assetPaths }) {
 
   const timeline : {}[] = [];
   // comment out pavlovia commands to run locally
-  //timeline.push(pavlovia_init); 
+  timeline.push(pavlovia_init); 
   timeline.push(preload)
   timeline.push(fullscreen)
   if(is_Safari){timeline.push(safari_is_bad)}
-  //timeline.push(task_instructions)
+  timeline.push(task_instructions)
   timeline.push(revaluation_and_control_task)
-  timeline.push(memory_task);
+  //timeline.push(memory_task);
   timeline.push(end_screen)
-  //timeline.push(pavlovia_finish); 
+  timeline.push(pavlovia_finish); 
   await jsPsych.run(timeline);
 
 }

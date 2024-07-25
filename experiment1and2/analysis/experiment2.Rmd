@@ -215,11 +215,15 @@ ggsave("figures/experiment2_revaluation.png")
 
 **Did participants learn from direct experience to make accurate second-stage choices at test?**
 ```{r second stage test model}
-second_stage_test_mod <- lm(second_stage_accuracy ~ age_z * block_condition,
+summary_data <- summarySE(data, measurevar="second_stage_test",
+                        groupvars=c("block_condition"))
+summary_data
+
+second_stage_test_mod <- lm(second_stage_test ~ age_z * block_condition,
                    data=data,
                    contrasts = list(block_condition="contr.sum"))
 my_tab_model(second_stage_test_mod)
-# second_stage_accuracy ~ age_z * block_condition + (1|subject_id) ===> isSingular
+# second_stage_test ~ age_z * block_condition + (1|subject_id) ===> isSingular
 ```
 
 ## Comparing rest vs no rest
@@ -294,11 +298,11 @@ reval_mod <- lm(reval_score ~  age_z * block_condition * block_order,
 my_tab_model(reval_mod)
 # reval_score ~  age_z * block_condition * block_order + (1|subject_id) ===> isSingular
 
-second_stage_test_mod <- lm(second_stage_accuracy ~ age_z * block_order * block_condition,
+second_stage_test_mod <- lm(second_stage_test ~ age_z * block_order * block_condition,
                    data=data,
                    contrasts = list(block_condition="contr.sum"))
 my_tab_model(second_stage_test_mod)
-# second_stage_accuracy ~ age_z * block_order * block_condition + (1|subject_id) ===> isSingular
+# second_stage_test ~ age_z * block_order * block_condition + (1|subject_id) ===> isSingular
 
 learning_mod_join <- lmer(last_10_accuracy ~ age_z * block_order * block_condition * rest + (1 |subject_id), 
                   data=data_join,

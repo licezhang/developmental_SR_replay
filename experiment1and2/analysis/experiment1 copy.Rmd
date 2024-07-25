@@ -1,0 +1,205 @@
+---
+title: "Experiment 1"
+output: html_document
+date: "2024-04-23"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+library(readr)
+library(ggplot2)
+library(afex)
+library(Rmisc)
+library(dplyr)
+library(sjPlot)
+library(tidyr)
+library(ggh4x)
+library(pROC)
+```
+
+## Loading Data
+All continuous variables are z-scored
+```{r read data, echo=T, results='hide', warning=FALSE}
+scale_this <- function(x){
+  (x - mean(x, na.rm=TRUE)) / sd(x, na.rm=TRUE)
+}
+
+learning_data <- read_csv("../data/wm_load/preprocessed/learning_data1.csv",show_col_types = FALSE)
+learning_data$age_z <- scale_this(learning_data$age)
+learning_data$trial_z <- scale_this(learning_data$trial_num)
+learning_data$block_order <- scale_this(learning_data$block_order)
+learning_data$subject_id <- factor(learning_data$subject_id)
+
+learning_data2 <- read_csv("../data/wm_load/preprocessed/learning_data2.csv",show_col_types = FALSE)
+learning_data2$age_z <- scale_this(learning_data2$age)
+learning_data2$trial_z <- scale_this(learning_data2$trial_num)
+learning_data2$block_order <- scale_this(learning_data2$block_order)
+
+relearning_data <- read_csv("../data/wm_load/preprocessed/relearning_data.csv",show_col_types = FALSE)
+relearning_data$age_z <- scale_this(relearning_data$age)
+relearning_data$trial_z <- scale_this(relearning_data$trial)
+relearning_data$block_order <- scale_this(relearning_data$block_order)
+
+data <- read_csv("../data/wm_load/preprocessed/data.csv",show_col_types = FALSE)
+data$block_order <- scale_this(data$block_order)
+data$rest <- factor(data$rest)
+
+exclusions_data <- read_csv("../data/wm_load/preprocessed/excluded.csv", show_col_types = FALSE)
+```
+
+```{r define model functions, include=FALSE}
+my_tab_model <- function(model){
+  tab_model(model, 
+          df.method = "wald",
+          show.stat=TRUE,
+          CSS = list(css.tdata = 'padding:0.1cm;padding-left:0.2cm;padding-right:0.2cm;'),
+          transform = NULL,
+          string.stat = "z",
+          string.p = "p > |z|",
+          show.re.var = FALSE,
+          show.icc = FALSE,
+          show.r2 = FALSE,
+          wrap.labels = 100,
+          show.ngroups = FALSE,
+          show.obs = FALSE)
+}
+
+my_plot_model <- function(model){
+  plot_model(model, 
+          show.intercept = T,
+          value.offset = 0.35,
+          transform = NULL,
+          show.values = T,) + 
+  geom_hline(yintercept = 0, linetype = "dashed", alpha = .5)
+}
+```
+
+## Exclusion Criteria
+Participants were excluded for >20 browser interactions, >15% timeouts on learning or memory trials, >4 comprehension errors, >5 catch trials missed, or failing to learn to criterion in the learning phase of the task
+```{r exclusions, warning=FALSE}
+criteria <- list(
+  broswer_interact = function(df) df$interactions > 20,
+  timeouts = function(df) (df$task_timeouts > 0.15 ),
+  comprehension_error = function(df) df$comprehension_retries > 4,
+  learning_accuracy = function(df) (df$block1_second_half_accuracy < 0.75 | df$block2_second_half_accuracy < 0.75 ),
+  dots_missed = function(df) df$dots_missed > 4,
+  beep_error = function(df) df$beep_error > 4
+)
+
+criteria_counts <- data.frame(
+  Criteria = character(length(criteria)),
+  Count = integer(length(criteria)))
+
+for (i in seq_along(criteria)) {
+  # Get the criterion function
+  criterion_name <- names(criteria)[i]
+  criterion <- criteria[[i]]
+  # Apply the criterion to count the number of rows
+  count <- sum(criterion(exclusions_data))
+  criteria_counts[i, "Criteria"] <- criterion_name
+  criteria_counts[i, "Count"] <- count
+  exclusions_data <- exclusions_data[!criterion(exclusions_data), ]
+}
+
+criteria_counts 
+```
+
+## Learning: Do participants learn to make optimal choices over the course of the learning blocks?
+Looking at optimal two-stage choices across the learning phase and average accuracy in the last 10 learning trials.
+```{r learning model 1}
+learning_mod_1 <- glmer(is_optimal ~ rest * trial_z * block_condition + (trial_z + block_condition | subject_id), 
+                        data = learning_data,
+                        family = binomial,
+                  control = glmerControl(optimizer = "bobyqa", optCtrl=list(maxfun=1e6)),
+                  contrasts = list(block_condition="contr.sum"))
+
+my_tab_model(learning_mod_1)
+# is_optimal ~ age_z * trial_z * block_condition + (trial_z * block_condition || subject_id ===> isSingular
+# is_optimal ~ age_z * trial_z * block_condition + (trial_z + block_condition || subject_id ===> SUCCESS
+```
+
+```{r learning plot}
+ld <- summarySE(learning_data, measurevar="is_optimal", groupvars=c("rest","trial_bin"))
+
+ggplot(ld, aes(x=trial_bin, y=is_optimal, color=rest)) + 
+    geom_point() +
+    geom_line(linewidth=0.8) +
+    geom_errorbar(aes(ymin=is_optimal-se, ymax=is_optimal+se), width=.7) +
+    xlab("Trial Number") +
+    ylab("Proportion of Optimal Choices") +
+    theme_classic(base_size = 17) 
+```
+
+## Re-learning: Do participants learn to make optimal choices during relearning?
+```{r relearning mod}
+relearning_mod <- glmer(correct ~ rest * trial_z * block_condition + (trial_z * block_condition  | subject_id),
+                  data= relearning_data,
+                  family = binomial,
+                  control = glmerControl(optimizer = "bobyqa", optCtrl=list(maxfun=1e6)),
+                  contrasts = list(block_condition="contr.sum"))
+my_tab_model(relearning_mod)
+```
+
+```{r relearning plot}
+relearning_data$trial_bin <- relearning_data$trial %/% 2 * 2
+sub_means <- summarySE(relearning_data, measurevar="correct", groupvars=c("block_condition","trial_bin","subject_id"))
+means <- summarySE(sub_means, measurevar="correct",
+                        groupvars=c("block_condition","trial_bin"))
+means <- means %>% mutate(block_condition=recode(block_condition,
+`original`="Control",
+`revaluation`="Revaluation"))
+
+strip <- strip_themed(background_x = elem_list_rect(fill = c("#F8746B", "#10BEC3")))
+ggplot(means, aes(y=correct,x=trial_bin)) +
+  geom_point() +
+  geom_line(linewidth=0.8) +
+  geom_errorbar(aes(ymin=correct-se, ymax=correct+se), width=.7)+
+  facet_wrap2(~ block_condition, scales = "free", strip=strip) +
+  ylab("Proportion of Optimal Choices") + 
+  scale_y_continuous(limits = c(0.2, 1)) +
+  theme_classic(base_size = 17) +
+  theme(aspect=2,legend.position="none") + 
+  xlab("Adjusted Trial Number")
+```
+
+
+## Replanning: do participants update their first-stage choices based on re-learning?
+```{r revaluation 1}
+reval_mod <- lm(reval_score ~ rest * block_condition,
+                   data=data,
+                   contrasts = list(block_condition="contr.sum"))
+my_tab_model(reval_mod)
+# reval_score ~  age_z * block_condition * block_order + (1|subject_id) ===> isSingular
+```
+
+``` {r reval plot}
+means <- summarySE(data, measurevar="reval_score", groupvars=c("rest","block_condition"))
+strip <- strip_themed(background_x = elem_list_rect(fill = c("#B27EE0","#7c44ad", "#501b80")),text_x=list(element_text(colour = "white")), background_y = elem_list_rect(fill = c("#C1ED5C")))
+ggplot(data, aes(x=block_condition, y=reval_score, fill =block_condition, color =block_condition)) +
+    geom_hline(yintercept=0) +
+    facet_wrap2('rest', strip=strip) +
+    geom_line(aes(group = subject_id), color = 'black', linewidth = .1, alpha = .5) +
+    geom_point(alpha = .5) +
+    geom_line(aes(x = block_condition, y = reval_score, group = rest), color = "black", size = 1, data = means) +
+    geom_point(aes(x = block_condition, y = reval_score), size = 5, alpha = 1, data=means) +
+    scale_y_continuous(limits = c(-0.2, 1)) +
+    xlab("Block Condition") +
+    ylab("Replanning Score") +
+    theme_classic(base_size = 16) + 
+    scale_color_manual(values=c("#F8746B", "#10BEC3")) +
+    ggtitle("Replanning Score by Categorical Age") +
+    theme(axis.text.x=element_text(size=12),legend.position="none", aspect=9/6)
+```
+
+**Did participants learn from direct experience to make accurate second-stage choices at test?**
+```{r second stage test model}
+summary_data <- summarySE(data, measurevar="second_stage_test",
+                        groupvars=c("block_condition"))
+summary_data
+
+second_stage_test_mod <- lm(second_stage_test ~ rest * block_condition,
+                   data=data,
+                   contrasts = list(block_condition="contr.sum"))
+my_tab_model(second_stage_test_mod)
+# second_stage_test ~ age_z * block_condition + (1|subject_id) ===> isSingular
+```

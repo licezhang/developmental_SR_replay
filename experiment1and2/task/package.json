@@ -11,6 +11,7 @@
     "@jspsych/plugin-call-function": "^1.1.2",
     "@jspsych/plugin-fullscreen": "^1.1.1",
     "@jspsych/plugin-html-keyboard-response": "^1.1.1",
+    "@jspsych/plugin-html-slider-response": "^1.1.3",
     "@jspsych/plugin-preload": "^1.1.1",
     "@types/react": "^18.0.24",
     "brfs": "^2.0.2",
