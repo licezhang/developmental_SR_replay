@@ -1,0 +1,187 @@
+---
+title: "Experiment 3"
+output: html_document
+date: "2024-12-21"
+---
+
+## Children leverage the Successor Representation for reward-guided choice
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(readr)
+library(ggh4x)
+library(afex)
+library(Rmisc)
+library(dplyr)
+library(kableExtra)
+library(tidyr)
+library(ggplot2)
+library(reshape2)
+library(sjPlot)
+```
+
+```{r define model functions, include=FALSE}
+my_tab_model <- function(model){
+  tab_model(model, 
+          df.method = "wald",
+          show.stat=TRUE,
+          CSS = list(css.tdata = 'padding:0.1cm;padding-left:0.2cm;padding-right:0.2cm;'),
+          transform = NULL,
+          string.stat = "z",
+          string.p = "p > |z|",
+          show.re.var = FALSE,
+          show.icc = FALSE,
+          show.r2 = FALSE,
+          wrap.labels = 100,
+          show.ngroups = FALSE,
+          show.obs = FALSE)
+}
+
+my_plot_model <- function(model){
+  plot_model(model, 
+          show.intercept = T,
+          value.offset = 0.35,
+          transform = NULL,
+          show.values = T,) + 
+  geom_hline(yintercept = 0, linetype = "dashed", alpha = .5)
+}
+```
+
+### Exclusion Criteria
+Participants were excluded for >20 browser interactions, >3 comprehension errors, >10 timeouts, or mean RT >5000ms 
+```{r exclusion criteria}
+exclusions_data <- read_csv("../data/preprocessed/excluded.csv")
+
+criteria <- list(
+  broswer_interact = function(df) df$browser_interactions > 20,
+  timeouts = function(df) df$missed_trials > 10,
+  comprehension_error = function(df) df$comp_retries > 3,
+  mean_rt = function(df) df$avg_rt > 5000
+)
+
+criteria_counts <- data.frame(
+  Criteria = character(length(criteria)),
+  Count = integer(length(criteria)))
+
+for (i in seq_along(criteria)) {
+  # Get the criterion function
+  criterion_name <- names(criteria)[i]
+  criterion <- criteria[[i]]
+  # Apply the criterion to count the number of rows
+  count <- sum(criterion(exclusions_data))
+  criteria_counts[i, "Criteria"] <- criterion_name
+  criteria_counts[i, "Count"] <- count
+  exclusions_data <- exclusions_data[!criterion(exclusions_data), ]
+}
+
+criteria_counts 
+```
+
+### Loading Full Dataset 
+
+Reading in preprocessed dataset. Each row represents a traversal trial and its preceeding shop-only trial. All continuous variables are z-scored \
+
+* **action1TowardsPrevEnd** (1 or 0; 1 corresponds to taking action1 towards island containing prior shop; 0 is other island).   \
+* **prior_reward** (1 or 0; 1 corresponds to reward on prior shop trial). \
+* **shop_neighbor_prior_reward** (1 or 0, corresponds to reward when the neighbor to the prior shop was last seen in traversal or shop-only).  \
+* **prior_shop_choice** (1 or 0, 1 if prior shop was chosen on last visit to its island).   \
+
+```{r read main dataset}
+data <- read_csv("../data/preprocessed/data.csv")
+scale_this <- function(x){
+  (x - mean(x, na.rm=TRUE)) / sd(x, na.rm=TRUE)
+}
+data$shop_neighbor_prior_reward <- scale_this(data$shop_neighbor_prior_reward)
+data$prior_shop_choice <- scale_this(data$prior_shop_choice)
+data$prior_reward <- scale_this(data$prior_reward)
+data$prior_island_reward <- scale_this(data$prior_island_reward)
+data$sub <- factor(data$sub)
+data$age <- scale_this(data$age)
+data$categorical_age <- factor(data$categorical_age, levels = c('Children', 'Adolescents', 'Adults'))
+
+# Filter data for analyses on children only
+child_only_data <- data[data$categorical_age == 'Children',]
+```
+
+### Participants leveraged mental models to guide choice
+A significant effect of **prior_reward** on island choice would suggest influence of prior shop trial on traversal trial island choice in a model-based or SR-dependent manner
+
+```{r reward_only model}
+reward_only <- glmer(action1TowardsPrevEnd ~ prior_reward * age + (prior_reward | sub), 
+                     data = data, 
+                     family = binomial)
+my_tab_model(reward_only)
+```
+
+### Unique signatures of MB and SR-based decision strategies
+* Significant effect of **prior_reward** would suggest influence of prior shop trial on traversal trial island choice in a model-based or SR-dependent manner. \
+* Significant **prior_shop_choice * prior_reward** interaction indicates SR-dependent behavior, while **prior_reward * shop_neighbor_prior_reward** interaction indicates MB-behavior. \
+
+```{r model-based/sr model, cache=TRUE}
+mb_sr <- glmer(action1TowardsPrevEnd ~ prior_reward * shop_neighbor_prior_reward * prior_shop_choice * age + (prior_reward * shop_neighbor_prior_reward * prior_shop_choice | sub),
+                     data = data, 
+                     family = binomial)
+my_tab_model(mb_sr)
+```
+
+### Refitting with child data only to see if there is still evidence for use of MB and SR strategies
+```{r child only}
+child_only_mb_sr <- glmer(action1TowardsPrevEnd ~ prior_reward * shop_neighbor_prior_reward * prior_shop_choice + (prior_reward * shop_neighbor_prior_reward * prior_shop_choice | sub), 
+                     data = child_only_data, 
+                     family = binomial) 
+my_tab_model(child_only_mb_sr)
+```
+
+### Plots for SR and MB interactions
+
+``` {r recoding variables}
+# recoding variables as factors for plotting
+data$prior_reward <- factor(data$prior_reward, labels=c("No Reward","Reward"))
+data$shop_neighbor_prior_reward <- factor(data$shop_neighbor_prior_reward, labels=c("No Reward","Reward"))
+data$prior_shop_choice <- factor(data$prior_shop_choice, labels=c("Neighboring","Observed"))
+data$prior_island_reward <- factor(data$prior_island_reward, labels=c("No Reward","Reward"))
+data$block_change_congruent <- factor(data$block_change_congruent, labels=c("Incongruent","Congruent"))
+```
+
+``` {r plot mb by age}
+summary_data <- summarySE(data, measurevar="action1TowardsPrevEnd",
+                        groupvars=c("shop_neighbor_prior_reward","prior_reward","sub","categorical_age"))
+summary_data <- summarySE(data, measurevar="action1TowardsPrevEnd",
+                        groupvars=c("shop_neighbor_prior_reward","prior_reward","categorical_age"))
+strip <- strip_themed(background_x = elem_list_rect(fill = c("#B27EE0","#7c44ad", "#501b80")),text_x=list(element_text(colour = "white")))
+
+ggplot(summary_data, aes(x = shop_neighbor_prior_reward, y = action1TowardsPrevEnd, fill = prior_reward)) +
+  facet_wrap2(~ categorical_age, strip=strip) +
+  geom_bar(stat = "identity", position = "dodge", colour="black") +
+  geom_errorbar(aes(ymin = action1TowardsPrevEnd - se, ymax = action1TowardsPrevEnd + se), 
+                position = position_dodge(width = 0.9), width = 0.25) +
+  labs(title = "Model-based effect by age group",
+       x = "Previous reward from neighboring shop",
+       y = "Prob. of choosing associated island") +
+  scale_fill_manual(name = "Non-traversal reward", values=c("cadetblue1","cadetblue3")) +
+  theme_classic(base_size = 12) + 
+  theme(axis.text.x=element_text(size=9.2), aspect.ratio=9/5) 
+ggsave("figures/experiment3_mb.png")
+```
+
+``` {r plot sr by age}
+summary_data <- summarySE(data, measurevar="action1TowardsPrevEnd",
+                        groupvars=c("prior_shop_choice","prior_reward","sub","categorical_age"))
+summary_data <- summarySE(data, measurevar="action1TowardsPrevEnd",
+                        groupvars=c("prior_shop_choice","prior_reward","categorical_age"))
+
+ggplot(summary_data, aes(x = prior_shop_choice, y = action1TowardsPrevEnd, fill = prior_reward)) +
+  geom_bar(stat = "identity", position = "dodge", colour="black") +
+  geom_errorbar(aes(ymin = action1TowardsPrevEnd - se, ymax = action1TowardsPrevEnd + se), 
+                position = position_dodge(width = 0.9), width = 0.25) +
+  labs(title = "Successor Representation effect by age group",
+       x = "Previous shop choice on island",
+       y = "Prob. of choosing associated island") +
+    scale_fill_manual(name = "Non-traversal reward", values=c("cadetblue1","cadetblue3")) +
+
+  facet_wrap2(~ categorical_age, strip=strip) +
+  theme_classic(base_size = 12) + 
+  theme(axis.text.x=element_text(size=9.2), aspect.ratio=9/5) +
+  scale_x_discrete(limits=rev)
+ggsave("figures/experiment3_sr.png")
+```

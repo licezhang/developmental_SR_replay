@@ -1,3 +1,0 @@
-"trial_type","trial_index","time_elapsed","internal_node_id","value","metadata"
-"pavlovia","0","1","0.0-0.0","",""
-"call-function","1","2","0.0-1.0","","{""task_version"":""sailing_part1_v1"",""task_condition"":""good"",""boats"":[""B"",""A"",""C"",""D""],""boats_demo"":[""E"",""H"",""F"",""G""],""islands"":[""A"",""B""],""subject_id"":""15429"",""age"":""21"",""gender"":""Male""}"

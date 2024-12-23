@@ -141,63 +141,6 @@ export const catch_practice = [
     },
 ]
 
-export const beep_practice_instructions = [
-    {
-        stimulus: 
-            `<p> Sometimes, you will come across a special kind of treasure chest that requires a password. </p>
-            <img src='./assets/img/instructions/beep_chest.jpg' class='instructions-image'>`,
-        audio: './assets/audio/beep_1.wav',
-        button: "Next",
-    },
-    {
-        stimulus: 
-            `<p> Your friend will send you the password using a series of beeps so that you can open the chest and earn treasure. </p>
-            <p> You will hear two kinds of beeps, a high beep and a low beep. </p>
-            <p> You should report the number of high beeps that you heard before seeing the chest. </p>
-            <img src='./assets/img/instructions/listen.jpg' class='instructions-image'>`,
-        audio: './assets/audio/beep_2.wav',
-        button: "Next",
-    },
-    {
-        stimulus: 
-            `<p> For example, if you hear this series of beeps, you should report 4 as the password using the slider. </p>
-            <p> After reporting a password for a chest, you should count the high beeps again starting from 0. </p>
-            <p> Let's try practicing that now. </p>`,
-        audio: './assets/audio/beep_3.wav',
-        button: "Next",
-    },
-]
-
-export const beep_practice = [
-    {
-        right_response: '<p>Correct! There were 6 high pitched beeps before you saw the chest. </p>',
-        wrong_response: '<p>Incorrect! Please try again. Remember to count the number of high pitched beeps only. </p>',
-        audio_stim: './assets/audio/beeps/practice_6.wav',
-        beeps: 6,
-        right_audio: './assets/audio/beep_practice_1r.wav',
-        wrong_audio: './assets/audio/beep_practice_wrong.wav',
-    },
-    {
-        right_response: '<p>Correct! There were 4 high pitched beeps before you saw the chest. </p>',
-        wrong_response: '<p>Incorrect! Please try again. Remember to count the number of high pitched beeps only. </p>',
-        audio_stim: './assets/audio/beeps/practice_4.wav',
-        beeps: 4,
-        right_audio: './assets/audio/beep_practice_2r.wav',
-        wrong_audio:  './assets/audio/beep_practice_wrong.wav',
-    },
-]
-
-
-export const beep_practice_complete = [
-    {
-        stimulus: 
-            `<p> Good job! In the real game we will not tell you if you entered the right password. </p>
-            <p> Do your best, the treasure you earn from these chests will also give you extra bonus money. </p>`,
-        audio: './assets/audio/beep_practice_complete.wav',
-        button: "Next",
-    },
-]
-
 export const task_comprehension_instructions = [
     {
         stimulus:
@@ -334,15 +277,7 @@ export const revaluation_instructions = [
         stimulus: 
             `<p> Now, you will travel with a friend who will choose whether you go up or down first. </p>
             <p> On these turns, you will just see the animal that they found. You will still get to choose which chest to search for treasure.</p>`,
-        audio:  './assets/audio/revaluation_1.wav',
-        button: "Next",
-    },
-    {
-        stimulus: 
-            `<p> In this part, you will also hear beeps from your friend and see special treasure chests that need a password. </p>
-            <p> Do your best to count the high beeps <b>and</b> choose between each animals' chests at the same time.</p>
-            <img src='./assets/img/instructions/beep_chest.jpg' class='instructions-image'>`,
-        audio:  './assets/audio/revaluation_2.wav',
+        audio:  './assets/audio/revaluation_instructions.wav',
         button: "Next",
     }
 ]

@@ -561,7 +561,7 @@ class PavloviaPlugin{
 }
 
 
-var info = {
+const info = {
     name: "pavlovia",
     description: 'communication with pavlovia.org',
     parameters: {

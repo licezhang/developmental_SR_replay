@@ -1,2 +1,0 @@
-"trial_type","trial_index","time_elapsed","internal_node_id","task_version","subject_id","assigned_condition","age","gender","browser_interaction"
-"pavlovia","0","1038","0.0-0.0","spark_pilot_2","7460","1","20","Male","[{""event"":""blur"",""trial"":1,""time"":14935},{""event"":""focus"",""trial"":1,""time"":37101},{""event"":""blur"",""trial"":1,""time"":43430},{""event"":""focus"",""trial"":1,""time"":61250},{""event"":""blur"",""trial"":1,""time"":111763},{""event"":""focus"",""trial"":1,""time"":111767}]"

@@ -1,8 +1,10 @@
 ---
 title: "Experiment 1"
 output: html_document
-date: "2024-04-23"
+date: "2024-12-19"
 ---
+
+## Participants across age leverage structured knowledge to update their behavior
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
@@ -17,22 +19,22 @@ library(ggh4x)
 library(pROC)
 ```
 
-## Loading Data
+### Loading Data
 All continuous variables are z-scored
 ```{r read data, echo=T, results='hide', warning=FALSE}
 scale_this <- function(x){
   (x - mean(x, na.rm=TRUE)) / sd(x, na.rm=TRUE)
 }
 
-learning_data <- read_csv("../data/experiment1_rest/preprocessed/learning_data1.csv",show_col_types = FALSE)
+learning_data <- read_csv("../data/experiment1_rest/preprocessed/learning_data.csv",show_col_types = FALSE)
 learning_data$age_z <- scale_this(learning_data$age)
 learning_data$trial_z <- scale_this(learning_data$trial_num)
 learning_data$block_order <- scale_this(learning_data$block_order)
 
-learning_data2 <- read_csv("../data/experiment1_rest/preprocessed/learning_data2.csv",show_col_types = FALSE)
-learning_data2$age_z <- scale_this(learning_data2$age)
-learning_data2$trial_z <- scale_this(learning_data2$trial_num)
-learning_data2$block_order <- scale_this(learning_data2$block_order)
+learning_data_by_stage <- read_csv("../data/experiment1_rest/preprocessed/learning_data_by_stage.csv",show_col_types = FALSE)
+learning_data_by_stage$age_z <- scale_this(learning_data_by_stage$age)
+learning_data_by_stage$trial_z <- scale_this(learning_data_by_stage$trial_num)
+learning_data_by_stage$block_order <- scale_this(learning_data_by_stage$block_order)
 
 relearning_data <- read_csv("../data/experiment1_rest/preprocessed/relearning_data.csv",show_col_types = FALSE)
 relearning_data$age_z <- scale_this(relearning_data$age)
@@ -41,8 +43,12 @@ relearning_data$block_order <- scale_this(relearning_data$block_order)
 
 data <- read_csv("../data/experiment1_rest/preprocessed/data.csv",show_col_types = FALSE)
 data$age_z <- scale_this(data$age)
-data$age_squared_z <- scale_this(data$age^2)
 data$block_order <- scale_this(data$block_order)
+
+data_filtered_secondstage_accuracy <- data %>%
+  group_by(subject_id) %>%
+  filter(all(second_stage_test >= 0.75)) %>%
+  ungroup()
 
 exclusions_data <- read_csv("../data/experiment1_rest/preprocessed/excluded.csv", show_col_types = FALSE)
 ```
@@ -74,7 +80,7 @@ my_plot_model <- function(model){
 }
 ```
 
-## Exclusion Criteria
+### Exclusion Criteria
 Participants were excluded for >20 browser interactions, >15% timeouts on learning or memory trials, >4 comprehension errors, >5 catch trials missed, or failing to learn to criterion in the learning phase of the task
 ```{r exclusions, warning=FALSE}
 criteria <- list(
@@ -104,61 +110,43 @@ for (i in seq_along(criteria)) {
 criteria_counts 
 ```
 
-## Learning: Do participants learn to make optimal choices over the course of the learning blocks?
+### Learning: Did participants learn to make optimal choices over the course of the learning blocks?
 Looking at optimal two-stage choices across the learning phase and average accuracy in the last 10 learning trials.
 ```{r learning model 1}
-learning_mod_1 <- glmer(is_optimal ~ age_z * trial_z * block_condition + (trial_z + block_condition | subject_id), 
-                        data = learning_data,
-                        family = binomial,
-                  control = glmerControl(optimizer = "bobyqa", optCtrl=list(maxfun=1e6)),
+learning_mod <- glmer(correct ~ age_z * trial_z * block_condition + (trial_z * block_condition | subject_id), 
+                  data = learning_data,
+                  family = binomial,
                   contrasts = list(block_condition="contr.sum"))
 
-my_tab_model(learning_mod_1)
-# is_optimal ~ age_z * trial_z * block_condition + (trial_z * block_condition || subject_id ===> isSingular
-# is_optimal ~ age_z * trial_z * block_condition + (trial_z + block_condition || subject_id ===> SUCCESS
+my_tab_model(learning_mod)
+
+# Look at average accuracy in last 10 trials of learning accross age
+summarySE(data, measurevar="last_10_accuracy", groupvars=c("categorical_age"))
 ```
 
 ```{r learning plot}
-ld <- summarySE(learning_data, measurevar="is_optimal", groupvars=c("categorical_age","trial_bin"))
+ld <- summarySE(learning_data, measurevar="correct", groupvars=c("categorical_age","trial_bin"))
 ld$categorical_age <- factor(ld$categorical_age, levels = c('Children', 'Adolescents', 'Adults'))
 
-ggplot(ld, aes(x=trial_bin, y=is_optimal, color=categorical_age)) + 
+ggplot(ld, aes(x=trial_bin, y=correct, color=categorical_age)) + 
     geom_point() +
     geom_line(linewidth=0.8) +
-    geom_errorbar(aes(ymin=is_optimal-se, ymax=is_optimal+se), width=.7) +
+    geom_errorbar(aes(ymin=correct-se, ymax=correct+se), width=.7) +
     xlab("Trial Number") +
     ylab("Proportion of Optimal Choices") +
     scale_color_manual(name="Age Group", values=c("#B27EE0","#7c44ad", "#501b80")) +
     theme_classic(base_size = 17) +
-    theme(aspect=1, legend.position = c(0.7, 0.3), legend.box.background=element_rect(),legend.box.margin=margin(5,5,5,5)) 
+    theme(aspect.ratio=1, legend.position = c(0.7, 0.3), legend.box.background=element_rect(),legend.box.margin=margin(5,5,5,5)) 
 ggsave("figures/experiment1_learning.png")
 ```
 
-```{r learning model 2}
-learning_mod_2 <- lmer(last_10_accuracy ~ age_z * block_condition + (1 |subject_id), 
-                  data=data,
-                  control = lmerControl(optimizer = "bobyqa", optCtrl=list(maxfun=1e6)),
-                  contrasts = list(block_condition="contr.sum"))
-my_tab_model(learning_mod_2)
-# last_10_accuracy ~ age_z * block_condition + (block_condition |subject_id) ===> 
-
-summary_data <- summarySE(data, measurevar="last_10_accuracy",
-                        groupvars=c("categorical_age"))
-summary_data
-```
-
-## Re-learning: Do participants learn to make optimal choices during relearning?
+### Re-learning: Did participants learn to make optimal choices during relearning?
 ```{r relearning mod}
-relearning_mod <- glmer(correct ~ age_z * trial_z * block_condition + (1 | subject_id),
+relearning_mod <- glmer(correct ~ age_z * trial_z * block_condition + (trial_z * block_condition | subject_id),
                   data= relearning_data,
                   family = binomial,
-                  control = glmerControl(optimizer = "bobyqa", optCtrl=list(maxfun=1e6)),
                   contrasts = list(block_condition="contr.sum"))
 my_tab_model(relearning_mod)
-# correct ~ age_z * trial_z * block_condition + (trial_z * block_condition || subject_id) ===> isSingular
-# correct ~ age_z * trial_z * block_condition + (trial_z + block_condition || subject_id) ===> isSingular
-# correct ~ age_z * trial_z * block_condition + (trial_z || subject_id) ===> isSingular
-# correct ~ age_z * trial_z * block_condition + (1 | subject_id) ===> SUCCESS
 ```
 
 ```{r relearning plot}
@@ -181,24 +169,29 @@ ggplot(means, aes(y=correct,x=trial_bin, color=categorical_age)) +
   ylab("Proportion of Optimal Choices") + 
   scale_y_continuous(limits = c(0.5, 1)) +
   theme_classic(base_size = 17) +
-  theme(aspect=2,legend.position="none") + 
-  xlab("Adjusted Trial Number")
+  theme(aspect.ratio=2,legend.position="none") + 
+  xlab("Adjusted Trial Number") 
 ggsave("figures/experiment1_relearning.png")
 ```
 
+### Second-stage test: did participants learn from direct experience in re-learning?
+```{r second stage test model}
+summarySE(data, measurevar="second_stage_test", groupvars=c("block_condition"))
 
-## Replanning: do participants update their first-stage choices based on re-learning?
+summarySE(data, measurevar="second_stage_test", groupvars=c("categorical_age"))
+
+second_stage_test_mod <- lmer(second_stage_test ~ age_z * block_condition + (1 | subject_id),
+                   data=data,
+                   contrasts = list(block_condition="contr.sum"))
+my_tab_model(second_stage_test_mod)
+```
+
+### First-stage test: did participants update their first-stage choices?
 ```{r revaluation 1}
-reval_mod <- lm(reval_score ~  age_z * block_condition * second_stage_test,
-                   data=data,
-                   contrasts = list(block_condition="contr.sum"))
+reval_mod <- lmer(reval_score ~  age_z * block_condition + (1 | subject_id),
+                  data= data,
+                  contrasts = list(block_condition="contr.sum"))
 my_tab_model(reval_mod)
-# reval_score ~  age_z * block_condition * block_order + (1|subject_id) ===> isSingular
-
-reval_mod_agesq <- lm(reval_score ~  (age_z + age_squared_z) * block_condition,
-                   data=data,
-                   contrasts = list(block_condition="contr.sum"))
-my_tab_model(reval_mod_agesq)
 ```
 
 ``` {r reval plot}
@@ -218,106 +211,72 @@ ggplot(data, aes(x=block_condition, y=reval_score, fill =block_condition, color 
     theme_classic(base_size = 16) + 
     scale_color_manual(values=c("#F8746B", "#10BEC3")) +
     ggtitle("Replanning Score by Categorical Age") +
-    theme(axis.text.x=element_text(size=12),legend.position="none", aspect=9/6)
+    theme(axis.text.x=element_text(size=12),legend.position="none", aspect.ratio=9/6)
 ggsave("figures/experiment1_revaluation.png")
 ```
 
-**Did participants learn from direct experience to make accurate second-stage choices at test?**
-```{r second stage test model}
-summary_data <- summarySE(data, measurevar="second_stage_test",
-                        groupvars=c("block_condition"))
-summary_data
-
-second_stage_test_mod <- lm(second_stage_test ~ age_z * block_condition,
-                   data=data,
-                   contrasts = list(block_condition="contr.sum"))
-my_tab_model(second_stage_test_mod)
-# second_stage_test ~ age_z * block_condition + (1|subject_id) ===> isSingular
-```
 
 ## Supplemental Models
-Modeling learning performance broken down by choice stage (first vs second)
-```{r learning model 3}
-learning_mod_3 <- glmer(optimal ~ age_z * trial_z * stage + (1 | subject_id),
-                  data= learning_data2,
+### Modeling learning performance broken down by choice stage (first vs second)
+```{r learning model by stage}
+learning_mod_by_stage <- glmer(optimal ~ age_z * trial_z * stage + (trial_z * stage | subject_id),
+                  data= learning_data_by_stage,
                   family = binomial,
-                  control = glmerControl(optimizer = "bobyqa", optCtrl=list(maxfun=1e6)),
                   contrasts = list(stage="contr.sum"))
 
-my_tab_model(learning_mod_3)
-# optimal ~ age_z * trial_z * stage + (trial_z * stage | subject_id) ===> isSingular
-# optimal ~ age_z * trial_z * stage + (trial_z + stage | subject_id) ===> isSingular
-# optimal ~ age_z * trial_z * stage + (trial_z | subject_id) ===> isSingular
-# optimal ~ age_z * trial_z * stage + (1 | subject_id) ===> SUCCESS
+my_tab_model(learning_mod_by_stage)
 ```
 
-Adding block_order to all relevant models
-```{r block order models}
-learning_mod_1 <- glmer(is_optimal ~ age_z * trial_z * block_order * block_condition + (1 | subject_id), 
-                        data = learning_data,
-                        family = binomial,
-                  control = glmerControl(optimizer = "bobyqa", optCtrl=list(maxfun=1e6)),
-                  contrasts = list(block_condition="contr.sum"))
-my_tab_model(learning_mod_1)
-# is_optimal ~ age_z * trial_z * block_order * block_condition + (trial_z * block_order || subject_id ===> isSingular
-# is_optimal ~ age_z * trial_z * block_order * block_condition + (trial_z + block_order || subject_id ===> isSingular
-# is_optimal ~ age_z * trial_z * block_order * block_condition + (trial_z || subject_id ===> isSingular
-# is_optimal ~ age_z * trial_z * block_order * block_condition + (1 | subject_id ===> SUCCESS
-
-learning_mod_2 <- lmer(last_10_accuracy ~ age_z * block_order * block_condition + (1 |subject_id), 
-                  data=data,
-                  control = lmerControl(optimizer = "bobyqa", optCtrl=list(maxfun=1e6)),
-                  contrasts = list(block_condition="contr.sum"))
-my_tab_model(learning_mod_2)
-
-relearning_mod <- glmer(correct ~ age_z * trial_z * block_condition * block_order + (1 | subject_id),
-                  data= relearning_data,
-                  family = binomial,
-                  control = glmerControl(optimizer = "bobyqa", optCtrl=list(maxfun=1e6)),
-                  contrasts = list(block_condition="contr.sum"))
-my_tab_model(relearning_mod)
-# correct ~ age_z * trial_z * block_order * block_condition + (trial_z * block_condition || subject_id) ===> isSingular
-# correct ~ age_z * trial_z * block_order * block_condition + (trial_z + block_condition || subject_id) ===> isSingular
-# correct ~ age_z * trial_z * block_order * block_condition + (trial_z || subject_id) ===> isSingular
-# correct ~ age_z * trial_z * block_order * block_condition + (1 | subject_id) ===> Success
-
-reval_mod <- lm(reval_score ~  age_z * block_condition * block_order,
-                   data=data,
+### Looking at replanning when excluding participants who performed poorly (<75% accurate) on second stage test
+``` {r excluding by second stage test}
+reval_mod_filtered_secondstage_accuracy <- lmer(reval_score ~  age_z * block_condition + (1 | subject_id),
+                   data=data_filtered_secondstage_accuracy,
                    contrasts = list(block_condition="contr.sum"))
-my_tab_model(reval_mod)
-# reval_score ~  age_z * block_condition * block_order + (1|subject_id) ===> isSingular
+my_tab_model(reval_mod_filtered_secondstage_accuracy)
 
-second_stage_test_mod <- lm(second_stage_test ~ age_z * block_order * block_condition,
-                   data=data,
-                   contrasts = list(block_condition="contr.sum"))
-my_tab_model(second_stage_test_mod)
-# second_stage_test ~ age_z * block_order * block_condition + (1|subject_id) ===> isSingular
+excluded_subjects <- data %>%
+  group_by(subject_id) %>%
+  filter(any(second_stage_test < 0.75)) %>%
+  distinct(subject_id)
+
+data <- data %>%
+  mutate(filtered_for_second_stage = subject_id %in% excluded_subjects$subject_id)
+
+data$filtered_for_second_stage <- factor(
+    data$filtered_for_second_stage, 
+    levels = c(TRUE, FALSE) # TRUE comes first
+)
+
+age_demographics_excluded <- data %>%
+  filter(filtered_for_second_stage == TRUE) %>%
+  group_by(categorical_age) %>%
+  summarise(n = n()/2)
+age_demographics_excluded
+
+labs <- c("TRUE" = "Second Stage Accuracy <75%", 
+          "FALSE" = "Second Stage Accuracy >=75%")
+
+means <- summarySE(data, measurevar="reval_score", groupvars=c("filtered_for_second_stage","block_condition"))
+strip <- strip_themed(background_x = elem_list_rect(fill = c("#B27EE0","#7c44ad", "#501b80")),text_x=list(element_text(colour = "white")), background_y = elem_list_rect(fill = c("#C1ED5C")))
+ggplot(data, aes(x=block_condition, y=reval_score, fill =block_condition, color =block_condition)) +
+    geom_hline(yintercept=0) +
+    facet_wrap2('filtered_for_second_stage', strip=strip, labeller = labeller(filtered_for_second_stage = labs)) +
+    geom_line(aes(group = subject_id), color = 'black', linewidth = .1, alpha = .5) +
+    geom_point(alpha = .5) +
+    geom_line(aes(x = block_condition, y = reval_score, group = filtered_for_second_stage), color = "black", size = 1, data = means) +
+    geom_point(aes(x = block_condition, y = reval_score), size = 5, alpha = 1, data=means) +
+    scale_y_continuous(limits = c(-0.2, 1)) +
+    xlab("Block Condition") +
+    ylab("Replanning Score") +
+    theme_classic(base_size = 16) + 
+    scale_color_manual(values=c("#F8746B", "#10BEC3")) +
+    theme(axis.text.x=element_text(size=14),legend.position="none", aspect.ratio=1.2) 
+
+ggsave("figures/experiment1_secondstagetest.png")
 ```
 
-```{r block order revaluation interaction effect plot}
-subj_means <- summarySE(data, measurevar="reval_score", groupvars=c("block_condition","block_order","categorical_age","subject_id"))
-means <- summarySE(subj_means, measurevar="reval_score", groupvars=c("block_condition","block_order","categorical_age"))
-means$categorical_age <- factor(means$categorical_age, levels = c('Children', 'Adolescents', 'Adults'))
-means$block_order <- factor(means$block_order, labels=c("First","Second"))
 
-ggplot(means, aes(x=block_order,y=reval_score, fill=block_condition)) +
-  geom_bar(stat = "identity",position="dodge") +
-  geom_errorbar(aes(ymin = reval_score - se, ymax = reval_score + se), position = position_dodge(width = 0.9), width = 0.25) +
-  facet_wrap(~ categorical_age, scales = "free") + 
-  scale_y_continuous(limits = c(0, 0.6)) 
-```
-
-```{r block order interaction 2nd stage test plot}
-subj_means <- summarySE(data, measurevar="second_stage_test", groupvars=c("block_condition","block_order","subject_id"))
-means <- summarySE(subj_means, measurevar="second_stage_test", groupvars=c("block_condition","block_order"))
-means$block_order <- factor(means$block_order, labels=c("First","Second"))
-
-ggplot(means, aes(x=block_order,y=second_stage_test, fill=block_condition)) +
-  geom_bar(stat = "identity",position="dodge") +
-  geom_errorbar(aes(ymin = second_stage_test - se, ymax = second_stage_test + se), position = position_dodge(width = 0.9), width = 0.25) 
-```
-
-Memory: does memory for first-stage stimuli relate to replanning behavior
+### Memory: does memory for first-stage stimuli relate to replanning behavior
 ``` {r memory models}
 memory_data <- read_csv("../data/experiment1_rest/preprocessed/memory_data.csv",show_col_types = FALSE)
 confidence.map <- c("definitely_new"=1, "maybe_new"=2, "maybe_old"=3, "definitely_old"=4)   
@@ -328,18 +287,38 @@ select(subject_id, environment, ground_truth, confidence_rating) %>%
     mutate(memory_auc = as.numeric(roc(ground_truth ~ confidence_rating)$auc)) %>%
     select(subject_id, environment, memory_auc) %>%
     unique()
-data <- merge(data, memory_AUCs, by=c("subject_id","environment")) 
+memory_data <- merge(data, memory_AUCs, by=c("subject_id","environment")) 
 
-data$reval_score <- scale_this(data$reval_score)
-memory_mod <- lmer(memory_auc ~  age_z * block_condition * reval_score + environment + (1|subject_id),
-                   data=data, 
-                   control = lmerControl(optimizer = "bobyqa", optCtrl=list(maxfun=1e6)),
+memory_data$reval_score <- scale_this(memory_data$reval_score)
+
+memory_mod <- lmer(memory_auc ~  age_z * block_order * block_condition * reval_score + environment + (1|subject_id),
+                   data=memory_data, 
                    contrasts = list(block_condition="contr.sum",environment="contr.sum"))
 my_tab_model(memory_mod)
-
-memory_mod_block_order <- lmer(memory_auc ~  age_z * block_order * block_condition * reval_score + environment + (1|subject_id),
-                   data=data, 
-                   control = lmerControl(optimizer = "bobyqa", optCtrl=list(maxfun=1e6)),
-                   contrasts = list(block_condition="contr.sum",environment="contr.sum"))
-my_tab_model(memory_mod_block_order)
 ```
+
+### Adding block_order to all relevant models
+```{r block order models}
+learning_mod <- glmer(correct ~ age_z * trial_z * block_order * block_condition + ( trial_z * block_condition | subject_id), 
+                        data = learning_data,
+                        family = binomial,
+                  contrasts = list(block_condition="contr.sum"))
+my_tab_model(learning_mod)
+
+relearning_mod <- glmer(correct ~ age_z * trial_z * block_condition * block_order + (trial_z * block_condition | subject_id),
+                  data= relearning_data,
+                  family = binomial,
+                  contrasts = list(block_condition="contr.sum"))
+my_tab_model(relearning_mod)
+
+reval_mod <- lmer(reval_score ~  age_z * block_condition * block_order + (1 | subject_id),
+                   data=data,
+                   contrasts = list(block_condition="contr.sum"))
+my_tab_model(reval_mod)
+
+second_stage_test_mod <- lmer(second_stage_test ~ age_z * block_order * block_condition + (1 | subject_id),
+                   data=data,
+                   contrasts = list(block_condition="contr.sum"))
+my_tab_model(second_stage_test_mod)
+```
+

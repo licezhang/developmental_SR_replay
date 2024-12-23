@@ -1,2 +1,0 @@
-"trial_type","trial_index","time_elapsed","internal_node_id","task_version","subject_id","assigned_condition","age","gender","rest","browser_interaction"
-"pavlovia","0","2927","0.0-0.0","pilot_wm_v1","6666f5d8c04b8d17bd3a4d8a","5","null","null","false","[{""event"":""blur"",""trial"":1,""time"":38727},{""event"":""focus"",""trial"":1,""time"":48746},{""event"":""blur"",""trial"":1,""time"":50533},{""event"":""focus"",""trial"":1,""time"":77465}]"

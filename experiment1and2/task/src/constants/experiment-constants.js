@@ -72,15 +72,14 @@ export const env2 = "canyon"
 
 const queryString = window.location.search;
 const urlParams = new URLSearchParams(queryString);
-export const subjectId = urlParams.get('sub')
+export const subjectId = urlParams.get('subject_ID')
 export const condition = urlParams.get('condition')
 export const age = urlParams.get('age')
 export const gender = urlParams.get('gender')
 export const taskOrder = condition % 2 === 0 ? ["revaluation","original"] : ["original","revaluation"]
-export const rest = condition <= 4 ? true : false
+export const stimuliOrder = condition <= 4 ? [env1, env2] : [env2, env1]
 export const valueOrder = condition % 4 < 2 ? [rewardMaps1, rewardMaps2] : [rewardMaps2, rewardMaps1]
-export const stimuliOrder = Math.random() > 0.5 ? [env2, env1] : [env1, env2]
-export const finalQualtricsLink = "https://app.prolific.com/submissions/complete?cc=CGF7F52T" //"https://nyu.qualtrics.com/jfe/form/SV_9Hsei29VzK8W0cu?subject_ID=" + subjectId;
+export const finalQualtricsLink = "https://nyu.qualtrics.com/jfe/form/SV_9Hsei29VzK8W0cu?subject_ID=" + subjectId;
 
 /* 
 Randomized order for memory test stimuli for each environment 
@@ -118,9 +117,6 @@ export const secondStageStimuliMap = {
 
 /* Timeline variables to start from the two second-stage stimuli equally */
 export const secondStageStartStates = (number) => Array(number).fill({startState:"ArrowUp"}).concat(Array(number).fill({startState:"ArrowDown"}))
-/* Timeline variables for revaluation trial beep audio */
-export const beepAudio = ["1_4","2_1","3_0","4_0","5_4","6_3","7_4","8_2","9_2","10_3","11_4","12_2","13_2","14_4","15_0","16_0","17_1","18_0"]
-export const practiceBeepAudio = ["19_0","20_0","21_1","22_3"]
 
 /* programmatically generate timeline variables with stimulus (string image file) and status ('old' or 'new') */
 const memoryTimeline = (start, stop, environment, status) => { 

@@ -1,3 +1,0 @@
-"trial_type","trial_index","time_elapsed","internal_node_id","task_version","subject_id","assigned_condition","age","gender","success","timeout","failed_images","failed_audio","failed_video","browser_interaction"
-"pavlovia","0","2080","0.0-0.0","spark_pilot_2","7330","3","12","Female","","","","","",""
-"preload","1","3951","0.0-1.0","spark_pilot_2","7330","3","12","Female","true","false","[]","[]","[]","[{""event"":""blur"",""trial"":2,""time"":5696},{""event"":""focus"",""trial"":2,""time"":16750}]"

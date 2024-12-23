@@ -1,4 +1,0 @@
-"trial_type","trial_index","time_elapsed","internal_node_id","value","metadata","success","timeout","failed_images","failed_audio","failed_video"
-"pavlovia","0","2","0.0-0.0","","","","","","",""
-"call-function","1","2","0.0-1.0","","{""task_version"":""sailing_part1_v1"",""task_condition"":""good"",""boats"":[""C"",""A"",""B"",""D""],""boats_demo"":[""E"",""F"",""H"",""G""],""islands"":[""B"",""A""],""subject_id"":""13971"",""age"":""19"",""gender"":""Male""}","","","","",""
-"preload","2","28030","0.0-2.0","","","true","false","[]","[]","[]"

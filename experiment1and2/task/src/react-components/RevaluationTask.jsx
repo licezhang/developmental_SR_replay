@@ -9,7 +9,7 @@ const ALLOWED_KEYS = {
 }
 
 function RevaluationTask({finishTrial, trial}) {
-  let {endStage, startState, rewardMap, environment, firstStageStimulus, showResult, forcedChoice, audioStim} = trial
+  let {endStage, startState, rewardMap, environment, firstStageStimulus, showResult, forcedChoice} = trial
   const secondStageStimuli = constants.secondStageStimuliMap[environment]
 
   const catchTrial = firstStageStimulus && firstStageStimulus.includes('catch')
@@ -98,8 +98,7 @@ function RevaluationTask({finishTrial, trial}) {
         correct: isOptimal(getState()),
         timeout: timeoutRef.current,
         fullState: getState(),
-        isCatch: catchTrial,
-        audioStim: audioStim
+        isCatch: catchTrial
       }
       finishTrial(data)
     } else if (!selectedRef.current){
@@ -136,12 +135,8 @@ function RevaluationTask({finishTrial, trial}) {
     startTime.current = performance.now()
     const timeLimit = showResult ? 2000 : 10000
     timerRef.current = setTimeout(function() { steptime(); }, timeLimit)
-    const audio = new Audio('./assets/audio/beeps/' + audioStim + '.wav');
-    audio.play();
     return () => {
       clearTimeout(timerRef.current);
-      audio.pause();
-      audio.currentTime = 0;
     }
   }, []);  
 
