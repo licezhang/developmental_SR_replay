@@ -38,5 +38,8 @@ Raw data is in the form of csv's with one file per task session. Preprocessed fi
 ## Analysis
 Raw data is preprocessed in python with code in `analysis/sailing_preprocess.ipynb` to filter excluded participants and reformat data. Figures and modeling are done in R Markdown files. Data for the demographics analysis in `analysis/sailing_demographics.Rmd` is not included in this repository for participant privacy reasons.
 
+### Modeling
+The mixture-of-agents reinforcement learning model [(Kahn & Daw, 2024)](https://www.biorxiv.org/content/10.1101/2023.11.28.569070v3) was coded in Julia (1.10) and fit using [EM](https://github.com/ndawlab/em). The specific version of EM (em-ak-em) used with these modeling scripts can be found in `analysis/modeling`.  
+
 ## License
 MIT © Alice Zhang
