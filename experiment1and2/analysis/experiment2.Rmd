@@ -135,7 +135,7 @@ ggplot(ld, aes(x=trial_bin, y=correct, color=categorical_age)) +
     xlab("Trial Number") +
     ylab("Proportion of Optimal Choices") +
     scale_color_manual(name="Age Group", values=c("#B27EE0","#7c44ad", "#501b80")) +
-    theme_classic(base_size = 17) +
+    theme_classic(base_size = 18) +
     theme(aspect.ratio=1, legend.position = c(0.7, 0.3), legend.box.background=element_rect(),legend.box.margin=margin(5,5,5,5)) 
 ggsave("figures/experiment2_learning.png")
 ```
@@ -168,9 +168,9 @@ ggplot(means, aes(y=correct,x=trial_bin, color=categorical_age)) +
   facet_wrap2(~ block_condition, scales = "free", strip=strip) +
   ylab("Proportion of Optimal Choices") + 
   scale_y_continuous(limits = c(0.5, 1)) +
-  theme_classic(base_size = 17) +
+  theme_classic(base_size = 18) +
   theme(aspect.ratio=2,legend.position="none") + 
-  xlab("Adjusted Trial Number") 
+  xlab("Trial Number") 
 ggsave("figures/experiment2_relearning.png")
 ```
 
