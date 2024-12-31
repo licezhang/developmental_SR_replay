@@ -44,6 +44,7 @@ relearning_data$block_order <- scale_this(relearning_data$block_order)
 data <- read_csv("../data/experiment1_rest/preprocessed/data.csv",show_col_types = FALSE)
 data$age_z <- scale_this(data$age)
 data$block_order <- scale_this(data$block_order)
+data$second_stage_test <- scale_this(data$second_stage_test)
 
 data_filtered_secondstage_accuracy <- data %>%
   group_by(subject_id) %>%
@@ -217,18 +218,14 @@ ggsave("figures/experiment1_revaluation.png")
 
 
 ## Supplemental Models
-### Modeling learning performance broken down by choice stage (first vs second)
-```{r learning model by stage}
-learning_mod_by_stage <- glmer(optimal ~ age_z * trial_z * stage + (trial_z * stage | subject_id),
-                  data= learning_data_by_stage,
-                  family = binomial,
-                  contrasts = list(stage="contr.sum"))
 
-my_tab_model(learning_mod_by_stage)
-```
-
-### Looking at replanning when excluding participants who performed poorly (<75% accurate) on second stage test
+### Looking at relation between second stage test accuracy and replanning 
 ``` {r excluding by second stage test}
+reval_mod_secondstage_accuracy <- lmer(reval_score ~  age_z * block_condition * second_stage_test + (1 | subject_id),
+                  data= data,
+                  contrasts = list(block_condition="contr.sum"))
+my_tab_model(reval_mod_secondstage_accuracy)
+
 reval_mod_filtered_secondstage_accuracy <- lmer(reval_score ~  age_z * block_condition + (1 | subject_id),
                    data=data_filtered_secondstage_accuracy,
                    contrasts = list(block_condition="contr.sum"))
@@ -296,29 +293,3 @@ memory_mod <- lmer(memory_auc ~  age_z * block_order * block_condition * reval_s
                    contrasts = list(block_condition="contr.sum",environment="contr.sum"))
 my_tab_model(memory_mod)
 ```
-
-### Adding block_order to all relevant models
-```{r block order models}
-learning_mod <- glmer(correct ~ age_z * trial_z * block_order * block_condition + ( trial_z * block_condition | subject_id), 
-                        data = learning_data,
-                        family = binomial,
-                  contrasts = list(block_condition="contr.sum"))
-my_tab_model(learning_mod)
-
-relearning_mod <- glmer(correct ~ age_z * trial_z * block_condition * block_order + (trial_z * block_condition | subject_id),
-                  data= relearning_data,
-                  family = binomial,
-                  contrasts = list(block_condition="contr.sum"))
-my_tab_model(relearning_mod)
-
-reval_mod <- lmer(reval_score ~  age_z * block_condition * block_order + (1 | subject_id),
-                   data=data,
-                   contrasts = list(block_condition="contr.sum"))
-my_tab_model(reval_mod)
-
-second_stage_test_mod <- lmer(second_stage_test ~ age_z * block_order * block_condition + (1 | subject_id),
-                   data=data,
-                   contrasts = list(block_condition="contr.sum"))
-my_tab_model(second_stage_test_mod)
-```
-
