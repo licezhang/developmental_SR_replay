@@ -159,8 +159,9 @@ ggplot(summary_data, aes(x = shop_neighbor_prior_reward, y = action1TowardsPrevE
        x = "Previous reward from neighboring shop",
        y = "Prob. of choosing associated island") +
   scale_fill_manual(name = "Non-traversal reward", values=c("cadetblue1","cadetblue3")) +
+  scale_x_discrete(guide = guide_axis(n.dodge = 2)) +
   theme_classic(base_size = 12) + 
-  theme(axis.text.x=element_text(size=9.2), aspect.ratio=9/5) 
+  theme(axis.text.x=element_text(size=11), aspect.ratio=9/5) 
 ggsave("figures/experiment3_mb.png")
 ```
 
@@ -177,11 +178,10 @@ ggplot(summary_data, aes(x = prior_shop_choice, y = action1TowardsPrevEnd, fill 
   labs(title = "Successor Representation effect by age group",
        x = "Previous shop choice on island",
        y = "Prob. of choosing associated island") +
-    scale_fill_manual(name = "Non-traversal reward", values=c("cadetblue1","cadetblue3")) +
-
+  scale_fill_manual(name = "Non-traversal reward", values=c("cadetblue1","cadetblue3")) +
+  scale_x_discrete(guide = guide_axis(n.dodge = 2), limits=rev) +
   facet_wrap2(~ categorical_age, strip=strip) +
   theme_classic(base_size = 12) + 
-  theme(axis.text.x=element_text(size=9.2), aspect.ratio=9/5) +
-  scale_x_discrete(limits=rev)
+  theme(axis.text.x=element_text(size=11), aspect.ratio=9/5) 
 ggsave("figures/experiment3_sr.png")
 ```
