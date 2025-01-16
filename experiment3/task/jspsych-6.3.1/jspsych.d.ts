@@ -1,0 +1,33 @@
+export interface jsPsychType {
+	plugins: { 
+		parameterType: {
+			BOOL: 0,
+			STRING: 1,
+			INT: 2,
+			FLOAT: 3,
+			FUNCTION: 4,
+			KEY: 5,
+			SELECT: 6,
+			HTML_STRING: 7,
+			IMAGE: 8,
+			AUDIO: 9,
+			VIDEO: 10,
+			OBJECT: 11,
+			COMPLEX: 12,
+			TIMELINE: 13,
+		},
+		'sailing-instructions': any,
+		'sailing-trial': any,
+		'sailing-comprehension': any,
+	},
+	pluginAPI: {
+		clearAllTimeouts,
+		cancelAllKeyboardResponses,
+		setTimeout,
+		getKeyboardResponse,
+	},
+	finishTrial,
+	data,
+	NO_KEYS,
+	endExperiment,
+}

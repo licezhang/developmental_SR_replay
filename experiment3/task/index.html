@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Decision Making Experiment</title>
+    
+    <!-- Load libraries -->
+    <script src="jquery-3.3.1/jquery.min.js"></script>
+    <script src="jspsych-6.3.1/jspsych.js"></script>
+    
+    <!-- Load jsPsych plug-ins -->
+    <!-- <script src="jspsych-6.3.1/plugins/jspsych-survey-likert.js"></script> -->
+    <script src="jspsych-6.3.1/plugins/jspsych-instructions.js"></script>
+    <script src="jspsych-6.3.1/plugins/jspsych-call-function.js"></script>
+    <script src="jspsych-6.3.1/plugins/jspsych-html-keyboard-response.js"></script>
+    <script src="jspsych-6.3.1/plugins/jspsych-fullscreen.js"></script>
+    <script src="jspsych-6.3.1/plugins/jspsych-audio-keyboard-response.js"></script>
+    <script src="jspsych-6.3.1/plugins/jspsych-audio-button-response.js"></script>
+    <script src="jspsych-6.3.1/plugins/jspsych-preload.js"></script>
+    <!-- <script src="jspsych-6.3.1/plugins/jspsych-survey-multi-choice.js"></script> -->
+    <script src="js/jspsych-sailing-trial.js"></script>
+    <script src="js/jspsych-sailing-instructions.js"></script>
+    <script src="js/jspsych-sailing-comprehension.js"></script>
+    <script src="js/jspsych-survey-demo.js"></script>
+    <script src="js/jspsych-survey-debrief.js"></script>
+    
+    <!-- Load CSS styles -->
+    <link href="jspsych-6.3.1/css/jspsych.css" rel="stylesheet" type="text/css"></link>
+    <link href="css/sailing.css" rel="stylesheet" type="text/css"></link>
+
+    <!-- Load pavlovia requirements-->
+    <script type="text/javascript" src="lib/vendors/jquery-2.2.0.min.js"></script>
+    <script type="text/javascript" src="lib/jspsych-pavlovia-3.0.0.js"></script>
+    
+
+    <!-- Get rid of pinterest -->
+    <meta name="pinterest" content="nopin" />
+    <meta name="pinterest" content="nohover" />
+
+    
+</head>
+<body></body>
+<script>
+    /* global jsPsych, redirect_success, redirect_reject */
+    // Display alert message on back/refresh.
+    // https://developer.mozilla.org/en-US/docs/Web/API/WindowEventHandlers/onbeforeunload
+    function verify_unload(e) {
+        e.preventDefault();
+        (e || window.event).returnValue = null;
+        return null;
+    }
+    window.addEventListener('beforeunload', verify_unload);
+
+    // Prevent Safari (and possibly other browsers) from moving the page on keypress
+    function preventDefault(e) {
+        if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].indexOf(e.code) > -1) {
+            e.preventDefault();
+        }
+    }
+    window.addEventListener('keydown', preventDefault, false);
+
+    // Standard Normal variate using Box-Muller transform.
+    function randn_bm() {
+        let u = 0;
+        let v = 0;
+        while (u === 0) u = Math.random(); // Converting [0,1) to (0,1)
+        while (v === 0) v = Math.random();
+        return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+    }
+    
+    // Uniform random means between 0.25 and 0.75
+    // const reward_means = Array.from(Array(4)).map(() => (Math.random() / 2) + 0.25);
+    
+    // const reward_drift_sd = 0.025;
+    // const reward_bound_lower = 0.25;
+    // const reward_bound_upper = 0.75;
+    
+    // Random walk on each reward mean
+    // function drift_rewards() {
+    //     for (let n = 0; n < 4; n += 1) {
+    //         // Drift
+    //         reward_means[n] += randn_bm() * reward_drift_sd;
+    //         // Reflect at bounbdaries
+    //         // e.g. if we're at reward_bound_upper + 0.1, ended up at reward_bound_upper - 0.1
+    //         // In theory, with a very large random draw, this could take multiple iterations to be properly bounded
+    //         while ((reward_means[n] > reward_bound_upper) || (reward_means[n] < reward_bound_lower)) {
+    //             if (reward_means[n] > reward_bound_upper) {
+    //                 reward_means[n] -= 2 * (reward_means[n] - reward_bound_upper);
+    //             } else {
+    //                 reward_means[n] += 2 * (reward_bound_lower - reward_means[n]);
+    //             }
+    //         }
+    //     }
+    // }
+    
+    // Randomly shuffle an array in-place
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i -= 1) {
+            const j = Math.floor(Math.random() * (i + 1));
+            const temp = array[i];
+            array[i] = array[j];
+            array[j] = temp;
+        }
+    }
+    
+    // Define global variables.
+    // Was the data low quality?
+    let low_quality = false;
+
+    const condition = 'good';
+
+    const queryString = window.location.search;
+    const urlParams = new URLSearchParams(queryString);
+    const subjectId = urlParams.get('subject_ID')
+    const age = urlParams.get('age')
+    const gender = urlParams.get('gender')
+
+    // Define comprehension threshold.
+    // Can miss up to `max_errors` and pass, and can repeat instructions `max_loops` before exclusion
+    const max_errors = 0;
+    const max_loops = 2;
+    let num_loops = 0;
+
+    // Define missed repsonses count.
+    const missed_threshold = 10;
+    // Strongly worded message above this threshold
+    const missed_warning_threshold = 7;
+    let missed_responses = 0;
+    
+    const boats = ['A', 'B', 'C', 'D'];
+    const boats_demo = ['E', 'F', 'G', 'H'];
+    const islands = ['A', 'B'];
+    shuffleArray(boats);
+    shuffleArray(boats_demo);
+    shuffleArray(islands);
+
+    let good_side_0 = Math.random() > 0.5 ? 0 : 1;
+    let good_side_1 = Math.random() > 0.5 ? 0 : 1;
+    const start_best_side = Math.random() > 0.5 ? 0 : 1;
+    // .15, .325, .675, .85
+    const reward_probabilities = [0, 0, 0, 0];
+    reward_probabilities[(start_best_side * 2) + (good_side_0)] = 0.85;
+    reward_probabilities[(start_best_side * 2) + (1 - good_side_0)] = 0.15;
+    reward_probabilities[((1 - start_best_side) * 2) + (good_side_1)] = 0.675;
+    reward_probabilities[((1 - start_best_side) * 2) + (1 - good_side_1)] = 0.325;
+
+    // good_side_0 / good_side_1 are 0/1
+    function good_swap() {
+        const temp1 = reward_probabilities[good_side_0];
+        reward_probabilities[good_side_0] = reward_probabilities[2 + good_side_1];
+        reward_probabilities[2 + good_side_1] = temp1;
+
+        const temp2 = reward_probabilities[1 - good_side_0];
+        reward_probabilities[1 - good_side_0] = reward_probabilities[3 - good_side_1];
+        reward_probabilities[3 - good_side_1] = temp2;
+    }
+
+    function bad_swap() {
+        const temp1 = reward_probabilities[good_side_0];
+        reward_probabilities[good_side_0] = reward_probabilities[3 - good_side_1];
+        reward_probabilities[3 - good_side_1] = temp1;
+
+        const temp2 = reward_probabilities[1 - good_side_0];
+        reward_probabilities[1 - good_side_0] = reward_probabilities[2 + good_side_1];
+        reward_probabilities[2 + good_side_1] = temp2;
+    }
+
+    function within_swap() {
+        const temp1 = reward_probabilities[good_side_0];
+        reward_probabilities[good_side_0] = reward_probabilities[1 - good_side_0];
+        reward_probabilities[1 - good_side_0] = temp1;
+
+        const temp2 = reward_probabilities[2 + good_side_1];
+        reward_probabilities[2 + good_side_1] = reward_probabilities[3 - good_side_1];
+        reward_probabilities[3 - good_side_1] = temp2;
+    }
+
+    // const good_side_2 = Math.random() > 0.5;
+    // const reward_probabilities = []
+
+    const main_timeline = [];
+
+    // True block length is doubled: 6 => 6 home + 6 navigation trials
+    const block_lens = [8, 8, 8, 8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9, 9, 10, 10, 10, 10, 11, 11, 12];
+    shuffleArray(block_lens);
+    // const block_lens = [10].concat(block_inds.map((x) => base_block_lens[x]));
+    let block_types;
+    if (condition === 'good') {
+        block_types = [1, 1, 1, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        shuffleArray(block_types);
+        block_types = [0].concat(block_types);
+    } else {
+        block_types = [0, 0, 0, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
+        shuffleArray(block_types);
+        block_types = [1].concat(block_types);
+    }
+
+    // Create an array of home visits [0, 1, 2, 3, 0, 1, 2, 3, ...] and shuffle
+    const n_trial_pairs = block_lens.reduce((partialSum, a) => partialSum + a, 0);
+    const home_boats = Array.from(Array(n_trial_pairs)).map((e, i) => i % 4);
+    shuffleArray(home_boats);
+    let k = 0;
+    for (let i = 0; i < block_lens.length; i += 1) {
+        const block_type = block_types[i];
+        const block_len = block_lens[i];
+        if (block_type === 0) {
+            good_swap();
+        } else if (block_type === 1) {
+            bad_swap();
+            good_side_0 = 1 - good_side_0;
+            good_side_1 = 1 - good_side_1;
+        } else {
+            within_swap();
+            good_side_0 = 1 - good_side_0;
+            good_side_1 = 1 - good_side_1;
+        }
+        for (let j = 0; j < block_len; j += 1) {
+            main_timeline.push({
+                boat: null, reward_probabilities: reward_probabilities.slice(), block_type, block_len, block_trial: 2 * j,
+            });
+            main_timeline.push({
+                boat: home_boats[k], reward_probabilities: reward_probabilities.slice(), block_type, block_len, block_trial: 2 * j + 1,
+            });
+	          k += 1;
+        }
+    }
+    
+    /* init connection with pavlovia.org */
+    const pavlovia_init = {
+        type: "pavlovia",
+        command: "init"
+    }; 
+
+    // end connection with pavlovia.org */
+    const pavlovia_finish = {
+        type: "pavlovia",
+        command: "finish"
+    }; 
+
+    /* define full screen enter */
+    const fullscreen_enter = {
+        type: 'fullscreen',
+        fullscreen_mode: true
+    };
+
+        /* audio test */
+    var beep_test = {
+        type: 'audio-keyboard-response',
+        stimulus: 'audio/beep_loop.wav',
+        choices: jsPsych.ALL_KEYS,
+        prompt: 'Press the space bar to proceed to the audio test.',
+    };
+
+    var audio_test_1 = {
+        type: 'audio-test',
+        stimulus: 'audio/turtle.mp3',
+        choices: ['repeat','fish', 'tiger', 'turtle', 'shark'],
+        correct_answer: 3,
+        prompt: 'Click on the word that you just heard.',
+        incorrect_prompt: 'Incorrect, please adjust your volume and try again.',
+        margin_vertical: '40px',
+        margin_horizontal: '10px',
+        button_html:[
+            '<img src="img/audio_test/replay.png" height="200px" width="200px"/>',
+            '<img src="img/audio_test/fish.png" height="200px" width="200px"/>',
+            '<img src="img/audio_test/tiger.png" height="200px" width="200px"/>',
+            '<img src="img/audio_test/turtle.png" height="200px" width="200px"/>',
+            '<img src="img/audio_test/shark.png" height="200px" width="200px"/>'
+        ],
+        post_trial_gap: 1000
+    };
+
+    var audio_test_2 = {
+        type: 'audio-test',
+        stimulus: 'audio/shark.mp3',
+        choices: ['repeat','turtle', 'shark', 'fish', 'tiger'],
+        correct_answer: 2,
+        prompt: 'Click on the animal that you just heard. If you need to, adjust your volume and try again.',
+        incorrect_prompt: 'Incorrect, please adjust your volume and try again.',
+        margin_vertical: '40px',
+        margin_horizontal: '10px',
+        button_html:[
+            '<img src="img/audio_test/replay.png" height="200px" width="200px"/>',
+            '<img src="img/audio_test/turtle.png" height="200px" width="200px"/>',
+            '<img src="img/audio_test/shark.png" height="200px" width="200px"/>',
+            '<img src="img/audio_test/fish.png" height="200px" width="200px"/>',
+            '<img src="img/audio_test/tiger.png" height="200px" width="200px"/>'
+        ],
+        post_trial_gap: 1000
+    };
+
+    var audio_test = {
+        timeline: [
+            beep_test,
+            audio_test_1,
+            audio_test_2,
+        ],
+    };
+
+    // Preload images
+    const preload = {
+        type: 'preload',
+        images: [
+            'img/ocean_background.png',
+            'img/foggy_background.png',
+            `img/islands_${islands[0]}_${islands[1]}.png`,
+            'img/boat_dummy_left.png',
+            'img/boat_dummy_right.png',
+            'img/boat_dummy_bottom.png',
+            `img/boat_${boats[0]}_left.png`,
+            `img/boat_${boats[2]}_left.png`,
+            `img/boat_${boats[1]}_right.png`,
+            `img/boat_${boats[3]}_right.png`,
+            `img/boat_${boats_demo[0]}_left.png`,
+            `img/boat_${boats_demo[2]}_left.png`,
+            `img/boat_${boats_demo[1]}_right.png`,
+            `img/boat_${boats_demo[3]}_right.png`,
+            "img/audio_test/replay.png",
+            "img/audio_test/turtle.png",
+            "img/audio_test/fish.png",
+            "img/audio_test/shark.png",
+            "img/audio_test/tiger.png",
+            `img/boat_${boats[0]}_bottom.png`,
+            `img/boat_${boats[1]}_bottom.png`,
+            `img/boat_${boats[2]}_bottom.png`,
+            `img/boat_${boats[3]}_bottom.png`,
+            `img/boat_${boats_demo[0]}_bottom.png`,
+            `img/boat_${boats_demo[1]}_bottom.png`,
+            `img/boat_${boats_demo[2]}_bottom.png`,
+            `img/boat_${boats_demo[3]}_bottom.png`,
+            'img/dock_bottom.png',
+            'img/dock_left.png',
+            'img/dock_right.png',
+            'img/gold.png',
+            'img/noreward.png',
+            'img/no_merchant_link.png',
+            'img/independent_turns.png',
+        ],
+        audio: [
+            'audio/beep_loop.wav',
+            'audio/shark.mp3',
+            'audio/turtle.mp3',
+            'audio/instructions/boats_1.mp3',
+            'audio/instructions/boats_2.mp3',
+            'audio/instructions/boats_3.mp3',
+            'audio/instructions/boats_4.mp3',
+            'audio/instructions/boats_5.mp3',
+            'audio/instructions/boats_6.mp3',
+            'audio/instructions/boats_7.mp3',
+            'audio/instructions/boats_8.mp3',
+            'audio/instructions/boats_9.mp3',
+            'audio/instructions/islands_1.mp3',
+            'audio/instructions/islands_2.mp3',
+            'audio/instructions/islands_3.mp3',
+            'audio/instructions/islands_4.mp3',
+            'audio/instructions/islands_5.mp3',
+            'audio/instructions/islands_6.mp3',
+            'audio/instructions/navigationquiz_1.mp3',
+            'audio/instructions/practice_1.mp3',
+            'audio/instructions/practice_2.mp3',
+            'audio/instructions/practice_3.mp3',
+            'audio/instructions/practice_4.mp3',
+            'audio/instructions/ready_1.mp3',
+            'audio/instructions/reward_1.mp3',
+            'audio/instructions/reward_2.mp3',
+            'audio/instructions/reward_3.mp3',
+            'audio/instructions/reward_4.mp3',
+            'audio/instructions/reward_5.mp3',
+            'audio/instructions/reward_6.mp3',
+            'audio/instructions/reward_7.mp3',
+            'audio/instructions/reward_8.mp3',
+            'audio/instructions/reward_9.mp3',
+            'audio/instructions/reward_10.mp3',
+            'audio/instructions/timeout_1.mp3',
+            'audio/instructions/timeout_2.mp3',
+            'audio/instructions/visits_1.mp3',
+            'audio/instructions/visits_2.mp3',
+            'audio/instructions/visits_3.mp3',
+        ]
+    };
+    
+    // const n_trial_pairs = 100;
+    // // Create an array of home visits [0, 1, 2, 3, 0, 1, 2, 3, ...] and shuffle
+    // const home_boats = Array.from(Array(n_trial_pairs)).map((e, i) => i % 4);
+    // shuffleArray(home_boats);
+    // const main_timeline = [];
+    // for (let i = 0; i < n_trial_pairs; i += 1) {
+    //     main_timeline.push({ boat: null, reward_probabilities: reward_means.slice() });
+    //     drift_rewards();
+    //     main_timeline.push({ boat: home_boats[i], reward_probabilities: reward_means.slice() });
+    //     drift_rewards();
+    // }
+    for (let i = 0; i < main_timeline.length; i += 1) {
+        main_timeline[i].progress = (i * 100) / main_timeline.length;
+    }
+    const main_trials = {
+        type: 'sailing-trial',
+        island_order: islands,
+        boat_order: boats,
+        timeline: main_timeline,
+        //warn_above_threshold: () => missed_responses > missed_warning_threshold,
+        on_finish(data) {
+            if (data.timeout) {
+                missed_responses += 1;
+            }
+            if (missed_responses > missed_threshold) {
+                jsPsych.endExperiment();
+            }
+        },
+        choice_duration: 10000,
+    };
+
+    // **************
+    // Quiz utilities
+    // **************
+    
+   
+    // Loop function to check the quiz
+    const check_quiz = (data) => {
+        // Extract number of errors.
+        const { num_errors } = data.values().slice(-1)[0];
+        // Check if instructions should repeat.
+        if (num_errors > max_errors) {
+            num_loops += 1;
+            if (num_loops >= max_loops) {
+                low_quality = true;
+                return false
+            }
+            return true;
+        }
+        return false;
+    };
+    // Quick experiment end if the data was low quality
+    const comprehension_check = {
+        type: 'call-function',
+        func() {},
+        on_finish() {
+            if (low_quality) { jsPsych.endExperiment(); }
+        },
+    };
+
+    // *****************
+    // Instruction Set 0
+    //
+    // Island and Boat Selection
+    // *****************
+    const instruction_islands = {
+        type: 'sailing-instructions',
+        island_order: islands,
+        boat_order: boats_demo,
+        instruction_set: 'islands',
+    };
+    const demo_island_choice = {
+        type: 'sailing-trial',
+        island_order: islands,
+        boat_order: boats_demo,
+        stage_2: false,
+        end_dwell_time: 300,
+        show_instructions: true,
+        timeline: [
+            { stage_1_choices: ['ArrowLeft'], text_island_choice: '<p>First, try navigating to the left island by pressing the &lt;Left&gt; key.</p>' },
+            { stage_1_choices: ['ArrowRight'], text_island_choice: '<p>Next, try navigating to the right island by pressing the &lt;Right&gt; key.</p>' },
+            { text_island_choice: '<p>Now, choose either island by pressing &lt;Left&gt; or &lt;Right&gt;.</p>' },
+        ],
+    };
+    const instruction_boats = {
+        type: 'sailing-instructions',
+        island_order: islands,
+        boat_order: boats_demo,
+        instruction_set: 'boats',
+    };
+    const demo_boat_choice = {
+        type: 'sailing-trial',
+        island_order: islands,
+        boat_order: boats_demo,
+        show_instructions: true,
+        island: 1,
+        timeline: [
+            {
+                stage_2_choices: ['ArrowLeft'],
+                text_boat_choice: '<p>First, try navigating to the left shop by pressing the &lt;Left&gt; key.</p>',
+                reward_probabilities: [1.0, 1.0, 1.0, 1.0],
+            },
+            {
+                stage_2_choices: ['ArrowRight'],
+                text_boat_choice: '<p>Next, try navigating to the right shop by pressing the &lt;Right&gt; key.</p>',
+                reward_probabilities: [1.0, 1.0, 1.0, 1.0],
+            },
+            {
+                text_boat_choice: '<p>Now, choose either shop by pressing &lt;Left&gt; or &lt;Right&gt;.</p>',
+                reward_probabilities: [0.0, 0.0, 0.0, 0.0],
+            },
+        ],
+    };
+    const instruction_navigation_quiz = {
+        type: 'sailing-instructions',
+        island_order: islands,
+        boat_order: boats_demo,
+        instruction_set: 'navigation_quiz',
+    };
+    const quiz_navigation = {
+        type: 'sailing-comprehension',
+        prompts: [
+            '<b><i>True</i> or <i>False</i>:</b>&nbsp;&nbsp;To claim treasure when it appears, I press &lt;Space&gt;.',
+            "<b><i>True</i> or <i>False</i>:</b>&nbsp;&nbsp;If I don't claim treasure, I'll miss out on it.",
+            '<b><i>True</i> or <i>False</i>:</b>&nbsp;&nbsp;The same shop can be found on both the left and the right island.',
+            '<b><i>True</i> or <i>False</i>:</b>&nbsp;&nbsp;The treasure I earn will affect my bonus money.',
+        ],
+        correct: ['true', 'true', 'false', 'true'],
+    };
+    const instruction_set_navigation = {
+        timeline: [{
+            timeline: [
+                instruction_islands,
+                demo_island_choice,
+                instruction_boats,
+                demo_boat_choice,
+                instruction_navigation_quiz,
+                {...quiz_navigation, last_try: function(){return num_loops+1 >= max_loops}},
+            ],
+            loop_function: check_quiz,
+        }],
+        on_timeline_start() { num_loops = 0; },
+    };
+
+    // *****************
+    // Instruction Set 1
+    //
+    // Changing success
+    // *****************
+    const instruction_reward = {
+        type: 'sailing-instructions',
+        island_order: islands,
+        boat_order: boats_demo,
+        instruction_set: 'reward',
+    };
+    const quiz_reward = {
+        type: 'sailing-comprehension',
+        prompts: [
+            '<b><i>True</i> or <i>False</i>:</b>&nbsp;&nbsp;The success of each shopkeeper changes over time.',
+            '<b><i>True</i> or <i>False</i>:</b>&nbsp;&nbsp;The chance a particular shopkeeper has treasure depends on how often I visit them.',
+            '<b><i>True</i> or <i>False</i>:</b>&nbsp;&nbsp;The fortune of the shopkeepers are unrelated. If one shopkeeper has good fortune, that does not mean that another shopkeeper has good or bad fortune.',
+        ],
+        correct: ['true', 'false', 'true'],
+    };
+    const instruction_set_reward = {
+        timeline: [{
+            timeline: [
+                instruction_reward,
+                {...quiz_reward, last_try: function(){return num_loops+1 >= max_loops}}
+            ],
+            loop_function: check_quiz,
+        }],
+        on_timeline_start() { num_loops = 0; },
+    };
+
+    // *****************
+    // Instruction Set 2
+    //
+    // Home Trials
+    // *****************
+    const instruction_visits = {
+        type: 'sailing-instructions',
+        island_order: islands,
+        boat_order: boats_demo,
+        instruction_set: 'visits',
+    };
+    const demo_visits = {
+        type: 'sailing-trial',
+        island_order: islands,
+        boat_order: boats_demo,
+        show_instructions: true,
+        text_home_trial: '<p>On a foggy day, you find yourself at a shop:<br/>Press &lt;Up&gt; to see if the shopkeeper has treasure.</p>',
+        timeline: [
+            { boat: 0, reward_probabilities: [0.2, 0.8, 0.2, 0.8] },
+            { boat: 1, reward_probabilities: [0.2, 0.8, 0.2, 0.8] },
+            { boat: 2, reward_probabilities: [0.2, 0.8, 0.2, 0.8] },
+            { boat: 3, reward_probabilities: [0.2, 0.8, 0.2, 0.8] },
+        ],
+    };
+    
+    const quiz_visits = {
+        type: 'sailing-comprehension',
+        prompts: [
+            '<b><i>True</i> or <i>False</i>:</b>&nbsp;&nbsp;The chance a particular shopkeeper has treasure is different when you visit them on a foggy day.',
+        ],
+        correct: ['false'],
+    };
+    const instruction_set_visits = {
+        timeline: [{
+            timeline: [
+                instruction_visits,
+                demo_visits,
+                {...quiz_visits, last_try: function(){return num_loops+1 >= max_loops}},
+            ],
+            loop_function: check_quiz,
+        }],
+        on_timeline_start() { num_loops = 0; },
+    };
+
+    // *****************
+    // Instruction Set 3
+    //
+    // Time out
+    // *****************
+    const instruction_timeout = {
+        type: 'sailing-instructions',
+        island_order: islands,
+        boat_order: boats_demo,
+        instruction_set: 'timeout',
+    };
+    const quiz_timeout = {
+        type: 'sailing-comprehension',
+        prompts: [
+            '<b><i>True</i> or <i>False</i>:</b>&nbsp;&nbsp;I only have 10 seconds to make each choice.',
+        ],
+        correct: ['true'],
+    };
+    const instruction_set_timeout = {
+        timeline: [{
+            timeline: [
+                instruction_timeout,
+                {...quiz_timeout, last_try: function(){return num_loops+1 >= max_loops}}
+            ],
+            loop_function: check_quiz,
+        }],
+        on_timeline_start() { num_loops = 0; },
+    };
+
+    // Practice Instructions
+    const instruction_practice = {
+        type: 'sailing-instructions',
+        island_order: islands,
+        boat_order: boats_demo,
+        allow_keyboard_response: false,
+        instruction_set: 'practice',
+    };
+
+    const practice = {
+        type: 'sailing-trial',
+        island_order: islands,
+        boat_order: boats_demo,
+        stage_2: true,
+        show_instructions: true,
+        reward_probabilities: [0.2, 0.8, 0.2, 0.8],
+        choice_duration: 10000,
+        timeline: [
+            { 
+                text_island_choice: '<p>Choose either island by pressing &lt;Left&gt; or &lt;Right&gt;.</p>',
+                text_boat_choice: '<p>Choose either shop by pressing &lt;Left&gt; or &lt;Right&gt;.</p>',
+            },
+            { 
+                text_island_choice: '<p>Choose either island by pressing &lt;Left&gt; or &lt;Right&gt;.</p>',
+                text_boat_choice: '<p>Choose either shop by pressing &lt;Left&gt; or &lt;Right&gt;.</p>',
+            },
+            { 
+                boat: 0, 
+                text_home_trial: '<p>On a foggy day, you find yourself at a shop:<br/>Press &lt;Up&gt; to see if the shopkeeper has treasure.</p>',
+            },
+            { 
+                text_island_choice: '<p>Choose either island by pressing &lt;Left&gt; or &lt;Right&gt;.</p>',
+                text_boat_choice: '<p>Choose either shop by pressing &lt;Left&gt; or &lt;Right&gt;.</p>',
+            },
+            { 
+                boat: 3, 
+                text_home_trial: '<p>On a foggy day, you find yourself at a shop:<br/>Press &lt;Up&gt; to see if the shopkeeper has treasure.</p>',
+            },
+            { 
+                text_island_choice: '<p>Choose either island by pressing &lt;Left&gt; or &lt;Right&gt;.</p>',
+                text_boat_choice: '<p>Choose either shop by pressing &lt;Left&gt; or &lt;Right&gt;.</p>',
+            },
+            
+        ],
+    };
+    const instruction_set_practice = {
+        timeline: [{
+            timeline: [
+                instruction_practice,
+                practice,
+            ],
+        }],
+    };
+
+    // Ready Instructions
+    const instruction_ready = {
+        type: 'sailing-instructions',
+        island_order: islands,
+        boat_order: boats_demo,
+        allow_keyboard_response: false,
+        instruction_set: 'ready',
+    };
+    
+    // Complete screen
+    const complete = {
+        type: 'instructions',
+        pages: [
+            `Great job! You have completed the experiment.
+             Your bonus will be paid out after submission based on your performance.
+             We just have a few more questions for you.`,
+        ],
+        show_clickable_nav: true,
+        button_label_previous: 'Prev',
+        button_label_next: 'Next',
+        on_start() { window.removeEventListener('keydown', preventDefault, false); },
+    };
+    
+    // Define demographics form.
+    const demographics = {
+        type: 'survey-demo',
+    };
+    
+    // Define debriefing form.
+    const debrief = {
+        type: 'survey-debrief',
+    };
+
+    // Trial to log experiment metadata
+    // Cleaner than adding it to every trial with `addProperties`
+    const save_metadata = {
+        type: 'call-function',
+        func: () => {},
+        data: {
+            metadata: {
+                task_version: 'sailing_part1_v1',
+                task_condition: condition,
+                boats,
+                boats_demo,
+                islands,
+                subject_id: subjectId,
+                age: age,
+                gender: gender
+            },
+        },
+    };
+    
+    // Initialize timeline.
+    // const timeline = [preload, instructions, demographics, debrief, main_trials, show_total_reward];
+    const timeline = [
+        // comment out pavlovia commands to run locally
+        //pavlovia_init,
+        save_metadata,
+        preload,
+        fullscreen_enter,
+        audio_test,
+        instruction_set_navigation,
+        instruction_set_reward,
+        instruction_set_visits,
+        instruction_set_timeout,
+        instruction_set_practice,
+        instruction_ready,
+        main_trials,
+        complete,
+        debrief,
+        //pavlovia_finish,
+    ];
+    jsPsych.init({
+        timeline,
+        on_interaction_data_update: function () {
+            /* append updated browser interaction data to last trial whenever it changes */
+            const interaction = jsPsych.data.getInteractionData()
+            jsPsych.data.addDataToLastTrial({'browser_interaction': interaction.json(), 'low_quality':low_quality})
+        },
+        on_finish() {
+            // Remove requirement to verify redirect
+            window.removeEventListener('beforeunload', verify_unload);
+            const link =  "https://nyu.qualtrics.com/jfe/form/SV_9NtM7q1HJEaCpMy?subject_ID=" + subjectId
+            document.body.innerHTML = `<p> <center> Please wait. You will be redirected in 5 seconds. If you are not redirected, you can <a href=` + link + `>click here</a> </center> </p>`
+            setTimeout(function () { location.href = link }, 5000)
+        },
+    });
+</script>
+</html>
