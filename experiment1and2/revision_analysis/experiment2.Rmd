@@ -1,0 +1,307 @@
+---
+title: "Experiment 2"
+output: html_document
+date: "2024-12-20"
+---
+
+## The opportunity for offline replay at rest did not influence replanning in children or adults
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+library(readr)
+library(ggplot2)
+library(afex)
+library(Rmisc)
+library(dplyr)
+library(sjPlot)
+library(tidyr)
+library(ggh4x)
+library(pROC)
+```
+
+### Loading Data
+All continuous variables are z-scored
+```{r read data, echo=T, results='hide', warning=FALSE}
+scale_this <- function(x){
+  (x - mean(x, na.rm=TRUE)) / sd(x, na.rm=TRUE)
+}
+
+learning_data <- read_csv("../data/experiment2_norest/preprocessed/learning_data.csv",show_col_types = FALSE)
+learning_data$age_z <- scale_this(learning_data$age)
+learning_data$trial_z <- scale_this(learning_data$trial_num)
+learning_data$block_order <- scale_this(learning_data$block_order)
+
+learning_data_by_stage <- read_csv("../data/experiment2_norest/preprocessed/learning_data_by_stage.csv",show_col_types = FALSE)
+learning_data_by_stage$age_z <- scale_this(learning_data_by_stage$age)
+learning_data_by_stage$trial_z <- scale_this(learning_data_by_stage$trial_num)
+learning_data_by_stage$block_order <- scale_this(learning_data_by_stage$block_order)
+
+relearning_data <- read_csv("../data/experiment2_norest/preprocessed/relearning_data.csv",show_col_types = FALSE)
+relearning_data$age_z <- scale_this(relearning_data$age)
+relearning_data$trial_z <- scale_this(relearning_data$trial)
+relearning_data$block_order <- scale_this(relearning_data$block_order)
+
+data <- read_csv("../data/experiment2_norest/preprocessed/data.csv",show_col_types = FALSE)
+data$age_z <- scale_this(data$age)
+data$block_order <- scale_this(data$block_order)
+data$second_stage_test <- scale_this(data$second_stage_test)
+
+data_filtered_secondstage_accuracy <- data %>%
+  group_by(subject_id) %>%
+  filter(all(second_stage_test >= 0.75)) %>%
+  ungroup()
+
+exclusions_data <- read_csv("../data/experiment2_norest/preprocessed/excluded.csv", show_col_types = FALSE)
+```
+
+```{r define model functions, include=FALSE}
+my_tab_model <- function(model){
+  tab_model(model, 
+          df.method = "wald",
+          show.stat=TRUE,
+          CSS = list(css.tdata = 'padding:0.1cm;padding-left:0.2cm;padding-right:0.2cm;'),
+          transform = NULL,
+          string.stat = "z",
+          string.p = "p > |z|",
+          show.re.var = FALSE,
+          show.icc = FALSE,
+          show.r2 = FALSE,
+          wrap.labels = 100,
+          show.ngroups = FALSE,
+          show.obs = FALSE)
+}
+
+my_plot_model <- function(model){
+  plot_model(model, 
+          show.intercept = T,
+          value.offset = 0.35,
+          transform = NULL,
+          show.values = T,) + 
+  geom_hline(yintercept = 0, linetype = "dashed", alpha = .5)
+}
+```
+
+### Exclusion Criteria
+Participants were excluded for >20 browser interactions, >15% timeouts on learning or memory trials, >4 comprehension errors, >5 catch trials missed, or failing to learn to criterion in the learning phase of the task
+```{r exclusions, warning=FALSE}
+criteria <- list(
+  broswer_interact = function(df) df$interactions > 20,
+  timeouts = function(df) (df$task_timeouts > 0.15 | df$memory_timeouts > 0.15),
+  comprehension_error = function(df) df$comprehension_retries > 4,
+  catch_missed = function(df) df$catch_correct < 11,
+  learning_accuracy = function(df) (df$block1_second_half_accuracy < 0.75 | df$block2_second_half_accuracy < 0.75 ),
+  dots_missed = function(df) df$dots_missed > 4
+)
+
+criteria_counts <- data.frame(
+  Criteria = character(length(criteria)),
+  Count = integer(length(criteria)))
+
+for (i in seq_along(criteria)) {
+  # Get the criterion function
+  criterion_name <- names(criteria)[i]
+  criterion <- criteria[[i]]
+  # Apply the criterion to count the number of rows
+  count <- sum(criterion(exclusions_data))
+  criteria_counts[i, "Criteria"] <- criterion_name
+  criteria_counts[i, "Count"] <- count
+  exclusions_data <- exclusions_data[!criterion(exclusions_data), ]
+}
+
+criteria_counts 
+```
+
+### Learning: Did participants learn to make optimal choices over the course of the learning blocks?
+Looking at optimal two-stage choices across the learning phase and average accuracy in the last 10 learning trials.
+```{r learning model 1}
+learning_mod <- glmer(correct ~ age_z * trial_z * block_condition + (trial_z * block_condition | subject_id), 
+                  data = learning_data,
+                  family = binomial,
+                  contrasts = list(block_condition="contr.sum"))
+
+my_tab_model(learning_mod)
+
+# Look at average accuracy in last 10 trials of learning accross age
+summarySE(data, measurevar="last_10_accuracy", groupvars=c("categorical_age"))
+```
+
+```{r learning plot}
+ld <- summarySE(learning_data, measurevar="correct", groupvars=c("categorical_age","trial_bin"))
+ld$categorical_age <- factor(ld$categorical_age, levels = c('Children', 'Adolescents', 'Adults'))
+
+ggplot(ld, aes(x=trial_bin, y=correct, color=categorical_age)) + 
+    geom_point() +
+    geom_line(linewidth=0.8) +
+    geom_errorbar(aes(ymin=correct-se, ymax=correct+se), width=.7) +
+    xlab("Trial Number") +
+    ylab("Proportion of Optimal Choices") +
+    scale_color_manual(name="Age Group", values=c("#B27EE0","#7c44ad", "#501b80")) +
+    theme_classic(base_size = 18) +
+    theme(aspect.ratio=1, legend.position = c(0.7, 0.3), legend.box.background=element_rect(),legend.box.margin=margin(5,5,5,5)) 
+ggsave("figures/experiment2_learning.png")
+```
+
+### Re-learning: Did participants learn to make optimal choices during relearning?
+```{r relearning mod}
+relearning_mod <- glmer(correct ~ age_z * trial_z * block_condition + (trial_z * block_condition | subject_id),
+                  data= relearning_data,
+                  family = binomial,
+                  contrasts = list(block_condition="contr.sum"))
+my_tab_model(relearning_mod)
+```
+
+```{r relearning plot}
+relearning_data$trial_bin <- relearning_data$trial %/% 2 * 2
+sub_means <- summarySE(relearning_data, measurevar="correct", groupvars=c("block_condition","trial_bin","subject_id","categorical_age"))
+means <- summarySE(sub_means, measurevar="correct",
+                        groupvars=c("block_condition","trial_bin","categorical_age"))
+means$categorical_age <- factor(means$categorical_age, levels = c('Children', 'Adolescents', 'Adults'))
+means <- means %>% mutate(block_condition=recode(block_condition,
+`original`="Control",
+`revaluation`="Revaluation"))
+
+strip <- strip_themed(background_x = elem_list_rect(fill = c("#F8746B", "#10BEC3")))
+ggplot(means, aes(y=correct,x=trial_bin, color=categorical_age)) +
+  geom_point() +
+  geom_line(linewidth=0.8) +
+  scale_color_manual(name="categorical_age", values=c("#B27EE0","#7c44ad", "#501b80")) +
+  geom_errorbar(aes(ymin=correct-se, ymax=correct+se), width=.7)+
+  facet_wrap2(~ block_condition, scales = "free", strip=strip) +
+  ylab("Proportion of Optimal Choices") + 
+  scale_y_continuous(limits = c(0.5, 1)) +
+  theme_classic(base_size = 18) +
+  theme(aspect.ratio=2,legend.position="none") + 
+  xlab("Trial Number") 
+ggsave("figures/experiment2_relearning.png")
+```
+
+### Second-stage test: did participants learn from direct experience in re-learning?
+```{r second stage test model}
+summarySE(data, measurevar="second_stage_test", groupvars=c("block_condition"))
+
+summarySE(data, measurevar="second_stage_test", groupvars=c("categorical_age"))
+
+second_stage_test_mod <- lmer(second_stage_test ~ age_z * block_condition + (1 | subject_id),
+                   data=data,
+                   contrasts = list(block_condition="contr.sum"))
+my_tab_model(second_stage_test_mod)
+```
+
+### First-stage test: did participants update their first-stage choices?
+```{r revaluation 1}
+reval_mod <- lmer(reval_score ~  age_z * block_condition + (1 | subject_id),
+                  data= data,
+                  contrasts = list(block_condition="contr.sum"))
+my_tab_model(reval_mod)
+```
+
+``` {r reval plot}
+data$categorical_age <- factor(data$categorical_age, levels = c('Children', 'Adolescents', 'Adults'))
+means <- summarySE(data, measurevar="reval_score", groupvars=c("categorical_age","block_condition"))
+strip <- strip_themed(background_x = elem_list_rect(fill = c("#B27EE0","#7c44ad", "#501b80")),text_x=list(element_text(colour = "white")), background_y = elem_list_rect(fill = c("#C1ED5C")))
+ggplot(data, aes(x=block_condition, y=reval_score, fill =block_condition, color =block_condition)) +
+    geom_hline(yintercept=0) +
+    facet_wrap2('categorical_age', strip=strip) +
+    geom_line(aes(group = subject_id), color = 'black', linewidth = .1, alpha = .5) +
+    geom_point(alpha = .5) +
+    geom_line(aes(x = block_condition, y = reval_score, group = categorical_age), color = "black", size = 1, data = means) +
+    geom_point(aes(x = block_condition, y = reval_score), size = 5, alpha = 1, data=means) +
+    scale_y_continuous(limits = c(-0.2, 1)) +
+    xlab("Block Condition") +
+    ylab("Replanning Score") +
+    theme_classic(base_size = 16) + 
+    scale_color_manual(values=c("#F8746B", "#10BEC3")) +
+    ggtitle("Replanning Score by Categorical Age") +
+    theme(axis.text.x=element_text(size=12),legend.position="none", aspect.ratio=9/6)
+ggsave("figures/experiment2_revaluation.png")
+```
+
+### Directly comparing rest vs no rest
+``` {r joined rest norest models}
+data_rest <- read_csv("../data/experiment1_rest/preprocessed/data.csv",show_col_types = FALSE)
+data_rest$age_z <- scale_this(data_rest$age)
+data_rest$block_order <- scale_this(data_rest$block_order)
+data_join <- rbind(data_rest, data)
+
+reval_mod_join <- lm(reval_score ~  age_z * block_condition * rest,
+                   data=data_join,
+                   contrasts = list(block_condition="contr.sum", rest="contr.sum"))
+my_tab_model(reval_mod_join)
+```
+
+## Supplemental Models
+
+### Looking at relation between second stage test accuracy and replanning 
+``` {r excluding by second stage test}
+reval_mod_secondstage_accuracy <- lmer(reval_score ~  age_z * block_condition * second_stage_test + (1 | subject_id),
+                  data= data,
+                  contrasts = list(block_condition="contr.sum"))
+my_tab_model(reval_mod_secondstage_accuracy)
+
+reval_mod_filtered_secondstage_accuracy <- lmer(reval_score ~  age_z * block_condition + (1 | subject_id),
+                   data=data_filtered_secondstage_accuracy,
+                   contrasts = list(block_condition="contr.sum"))
+my_tab_model(reval_mod_filtered_secondstage_accuracy)
+
+excluded_subjects <- data %>%
+  group_by(subject_id) %>%
+  filter(any(second_stage_test < 0.75)) %>%
+  distinct(subject_id)
+
+data <- data %>%
+  mutate(filtered_for_second_stage = subject_id %in% excluded_subjects$subject_id)
+
+data$filtered_for_second_stage <- factor(
+    data$filtered_for_second_stage, 
+    levels = c(TRUE, FALSE) # TRUE comes first
+)
+
+age_demographics_excluded <- data %>%
+  filter(filtered_for_second_stage == TRUE) %>%
+  group_by(categorical_age) %>%
+  summarise(n = n()/2)
+age_demographics_excluded
+
+labs <- c("TRUE" = "Second Stage Accuracy <75%", 
+          "FALSE" = "Second Stage Accuracy >=75%")
+
+means <- summarySE(data, measurevar="reval_score", groupvars=c("filtered_for_second_stage","block_condition"))
+strip <- strip_themed(background_x = elem_list_rect(fill = c("#B27EE0","#7c44ad", "#501b80")),text_x=list(element_text(colour = "white")), background_y = elem_list_rect(fill = c("#C1ED5C")))
+ggplot(data, aes(x=block_condition, y=reval_score, fill =block_condition, color =block_condition)) +
+    geom_hline(yintercept=0) +
+    facet_wrap2('filtered_for_second_stage', strip=strip, labeller = labeller(filtered_for_second_stage = labs)) +
+    geom_line(aes(group = subject_id), color = 'black', linewidth = .1, alpha = .5) +
+    geom_point(alpha = .5) +
+    geom_line(aes(x = block_condition, y = reval_score, group = filtered_for_second_stage), color = "black", size = 1, data = means) +
+    geom_point(aes(x = block_condition, y = reval_score), size = 5, alpha = 1, data=means) +
+    scale_y_continuous(limits = c(-0.2, 1)) +
+    xlab("Block Condition") +
+    ylab("Replanning Score") +
+    theme_classic(base_size = 16) + 
+    scale_color_manual(values=c("#F8746B", "#10BEC3")) +
+    theme(axis.text.x=element_text(size=14),legend.position="none", aspect.ratio=1.2) 
+
+ggsave("figures/experiment2_secondstagetest.png")
+```
+
+
+### Memory: does memory for first-stage stimuli relate to replanning behavior
+``` {r memory models}
+memory_data <- read_csv("../data/experiment2_norest/preprocessed/memory_data.csv",show_col_types = FALSE)
+confidence.map <- c("definitely_new"=1, "maybe_new"=2, "maybe_old"=3, "definitely_old"=4)   
+memory_data$confidence_rating <- confidence.map[as.character(memory_data$response0)]
+memory_AUCs <- memory_data %>%
+select(subject_id, environment, ground_truth, confidence_rating) %>%
+    group_by(subject_id, environment) %>%
+    mutate(memory_auc = as.numeric(roc(ground_truth ~ confidence_rating)$auc)) %>%
+    select(subject_id, environment, memory_auc) %>%
+    unique()
+memory_data <- merge(data, memory_AUCs, by=c("subject_id","environment")) 
+
+memory_data$reval_score <- scale_this(memory_data$reval_score)
+
+memory_mod <- lmer(memory_auc ~  age_z * block_order * block_condition * reval_score + environment + (1|subject_id),
+                   data=memory_data, 
+                   contrasts = list(block_condition="contr.sum",environment="contr.sum"))
+my_tab_model(memory_mod)
+```
