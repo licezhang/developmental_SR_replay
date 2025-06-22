@@ -44,7 +44,7 @@ relearning_data$block_order <- scale_this(relearning_data$block_order)
 data <- read_csv("../data/experiment1_rest/preprocessed/data.csv",show_col_types = FALSE)
 data$age_z <- scale_this(data$age)
 data$block_order <- scale_this(data$block_order)
-data$second_stage_test <- scale_this(data$second_stage_test)
+data$second_stage_test_z <- scale_this(data$second_stage_test)
 
 data_filtered_secondstage_accuracy <- data %>%
   group_by(subject_id) %>%
@@ -187,6 +187,44 @@ second_stage_test_mod <- lmer(second_stage_test ~ age_z * block_condition + (1 |
 my_tab_model(second_stage_test_mod)
 ```
 
+```{r 2nd stage test plot}
+data$categorical_age <- factor(data$categorical_age, levels = c('Children', 'Adolescents', 'Adults'))
+
+# Calculate means and SEs
+means <- summarySE(data, measurevar="second_stage_test", groupvars=c("categorical_age", "block_condition"))
+
+# Themed strip for facet
+strip <- strip_themed(
+  background_x = elem_list_rect(fill = c("#B27EE0","#7c44ad", "#501b80")),
+  text_x = list(element_text(colour = "white")),
+  background_y = elem_list_rect(fill = c("#C1ED5C"))
+)
+
+ggplot(data, aes(x=block_condition, y=second_stage_test, fill=block_condition)) +
+  geom_bar(stat="summary", fun="mean", position=position_dodge(width=0.7), width=0.8, color="black") +
+  geom_point(position=position_jitter(width=0.15, height=0), alpha=0.5, shape=21, color="black") +
+  geom_errorbar(
+    data = means,
+    aes(
+      x = block_condition,
+      y = second_stage_test,
+      ymin = second_stage_test - se,
+      ymax = second_stage_test + se
+    ),
+    width = 0.2,
+    position = position_dodge(width = 0.7),
+    inherit.aes = FALSE
+  ) +
+  facet_wrap2('categorical_age', strip=strip, ncol=1) +
+  scale_y_continuous(limits = c(0, 1.1), breaks = c(0, 0.25, 0.5, 0.75, 1)) +
+  xlab("Block Condition") +
+  ylab("Second Stage Test Accuracy") +
+  theme_classic(base_size = 14) + 
+  scale_fill_manual(values=c("#F8746B", "#10BEC3")) +
+  theme(axis.text.x=element_text(size=10), legend.position="none", aspect.ratio=6/9)
+ggsave("figures/experiment1_secondstagetest.png",height = 4)
+```
+
 ### First-stage test: did participants update their first-stage choices?
 ```{r revaluation 1}
 reval_mod <- lmer(reval_score ~  age_z * block_condition + (1 | subject_id),
@@ -194,6 +232,7 @@ reval_mod <- lmer(reval_score ~  age_z * block_condition + (1 | subject_id),
                   contrasts = list(block_condition="contr.sum"))
 my_tab_model(reval_mod)
 ```
+
 
 ``` {r reval plot}
 data$categorical_age <- factor(data$categorical_age, levels = c('Children', 'Adolescents', 'Adults'))
@@ -221,7 +260,7 @@ ggsave("figures/experiment1_revaluation.png")
 
 ### Looking at relation between second stage test accuracy and replanning 
 ``` {r excluding by second stage test}
-reval_mod_secondstage_accuracy <- lmer(reval_score ~  age_z * block_condition * second_stage_test + (1 | subject_id),
+reval_mod_secondstage_accuracy <- lmer(reval_score ~  age_z * block_condition * second_stage_test_z + (1 | subject_id),
                   data= data,
                   contrasts = list(block_condition="contr.sum"))
 my_tab_model(reval_mod_secondstage_accuracy)
