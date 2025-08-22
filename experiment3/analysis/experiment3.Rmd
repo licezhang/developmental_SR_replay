@@ -150,123 +150,19 @@ summary_data <- summarySE(data, measurevar="action1TowardsPrevEnd",
                         groupvars=c("shop_neighbor_prior_reward","prior_reward","categorical_age"))
 strip <- strip_themed(background_x = elem_list_rect(fill = c("#B27EE0","#7c44ad", "#501b80")),text_x=list(element_text(colour = "white")))
 
-p1 <- ggplot(summary_data, aes(x = shop_neighbor_prior_reward, y = action1TowardsPrevEnd, fill = prior_reward)) +
+ggplot(summary_data, aes(x = shop_neighbor_prior_reward, y = action1TowardsPrevEnd, fill = prior_reward)) +
   facet_wrap2(~ categorical_age, strip=strip) +
   geom_bar(stat = "identity", position = "dodge", colour="black") +
   geom_errorbar(aes(ymin = action1TowardsPrevEnd - se, ymax = action1TowardsPrevEnd + se), 
                 position = position_dodge(width = 0.9), width = 0.25) +
-  labs(title = "Empirical data",
+  labs(title = "Model-based effect by age group",
        x = "Previous reward from neighboring shop",
        y = "Prob. of choosing associated island") +
-  scale_fill_manual(name = "Non-traversal reward", values=c("#7ECAC9","#325379")) +
+  scale_fill_manual(name = "Non-traversal reward", values=c("cadetblue1","cadetblue3")) +
   scale_x_discrete(guide = guide_axis(n.dodge = 2)) +
-  ylim(0,.7) +
   theme_classic(base_size = 12) + 
-  theme(axis.text.x=element_text(size=11)) 
+  theme(axis.text.x=element_text(size=11), aspect.ratio=9/5) 
 ggsave("figures/experiment3_mb.png")
-```
-
-```{r test}
-summary_data <- data.frame(
-  shop_neighbor_prior_reward = c("No Reward", "No Reward", "Reward", "Reward"),
-  action1TowardsPrevEnd = c(0.25, 0.666, 0.666, 0.666),
-  prior_reward = c("No Reward", "Reward", "No Reward", "Reward")
-)
-p2 <- ggplot(summary_data, aes(x = shop_neighbor_prior_reward, y = action1TowardsPrevEnd, fill = prior_reward)) +
-  geom_bar(stat = "identity", position = "dodge", colour="black") +
-  labs(title = "Model-based prediction",
-    x = "Previous reward from neighboring shop",
-       y = "Prob. of choosing associated island") +
-  ylim(0,.7) +
-  scale_fill_manual(name = "Non-traversal reward", values=c("#7ECAC9","#325379")) +
-  theme_classic(base_size = 12) + 
-  theme(axis.text.x=element_text(size=11)) + 
-  theme(legend.position = "none")
-
-ggsave("figures/experiment3_mb_pred.png")
-
-combined_plot <- p2 + plot_spacer() + p1 + plot_layout(ncol = 3, width=c(1,.2,3))
-ggsave("figures/combined_plot.png", combined_plot, width = 11, height = 11/3)
-
-
-summary_data <- summarySE(data, measurevar="action1TowardsPrevEnd",
-                        groupvars=c("prior_reward","sub","categorical_age"))
-summary_data <- summarySE(data, measurevar="action1TowardsPrevEnd",
-                        groupvars=c("prior_reward","categorical_age"))
-strip <- strip_themed(background_x = elem_list_rect(fill = c("#B27EE0","#7c44ad", "#501b80")),text_x=list(element_text(colour = "white")))
-
-p1 <- ggplot(summary_data, aes(x = prior_reward, y = action1TowardsPrevEnd, fill = prior_reward)) +
-  facet_wrap2(~ categorical_age, strip=strip) +
-  geom_bar(stat = "identity", position = "dodge", colour="black") +
-  geom_errorbar(aes(ymin = action1TowardsPrevEnd - se, ymax = action1TowardsPrevEnd + se), 
-                position = position_dodge(width = 0.9), width = 0.25) +
-  labs(title = "Empirical data",
-       x = "Non-traversal reward",
-       y = "Prob. of choosing associated island") +
-  scale_fill_manual(name = "Non-traversal reward", values=c("#7ECAC9","#325379")) +
-  scale_x_discrete(guide = guide_axis(n.dodge = 2)) +
-  ylim(0,.7) +
-  theme_classic(base_size = 12) + 
-  theme(axis.text.x=element_text(size=11))
-
-summary_data <- data.frame(
-  action1TowardsPrevEnd = c(0.5, 0.5),
-  prior_reward = c("No Reward", "Reward")
-)
-p2 <- ggplot(summary_data, aes(x = prior_reward, y = action1TowardsPrevEnd, fill = prior_reward)) +
-  geom_bar(stat = "identity", position = "dodge", colour="black") +
-  labs(title = "Model-free prediction",
-    x = "Non-traversal reward",
-       y = "Prob. of choosing associated island") +
-  ylim(0,.7) +
-  scale_fill_manual(name = "Non-traversal reward", values=c("#7ECAC9","#325379")) +
-  theme_classic(base_size = 12) + 
-  theme(axis.text.x=element_text(size=11)) + 
-  theme(legend.position = "none")
-
-combined_plot <- p2 + plot_spacer() + p1 + plot_layout(ncol = 3, width=c(1,.2,3))
-ggsave("figures/combined_plot_mf.png", combined_plot, width = 11, height = 11/3)
-
-summary_data <- summarySE(data, measurevar="action1TowardsPrevEnd",
-                        groupvars=c("prior_shop_choice","prior_reward","sub","categorical_age"))
-summary_data <- summarySE(data, measurevar="action1TowardsPrevEnd",
-                        groupvars=c("prior_shop_choice","prior_reward","categorical_age"))
-
-p1 <- ggplot(summary_data, aes(x = prior_shop_choice, y = action1TowardsPrevEnd, fill = prior_reward)) +
-  geom_bar(stat = "identity", position = "dodge", colour="black") +
-  geom_errorbar(aes(ymin = action1TowardsPrevEnd - se, ymax = action1TowardsPrevEnd + se), 
-                position = position_dodge(width = 0.9), width = 0.25) +
-  labs(title = "Empirical data",
-       x = "Previous shop choice on island",
-       y = "Prob. of choosing associated island") +
-  scale_fill_manual(name = "Non-traversal reward", values=c("#7ECAC9","#325379")) +
-  scale_x_discrete(guide = guide_axis(n.dodge = 2), limits=rev) +
-  facet_wrap2(~ categorical_age, strip=strip) +
-  theme_classic(base_size = 12) + 
-  theme(axis.text.x=element_text(size=11)) 
-
-summary_data <- data.frame(
-  prior_shop_choice = c("Observed", "Observed", "Neighboring", "Neighboring"),
-  action1TowardsPrevEnd = c(0.25, 0.666, .5, .5),
-  prior_reward = c("No Reward", "Reward", "No Reward", "Reward")
-)
-summary_data$prior_shop_choice <- factor(summary_data$prior_shop_choice,
-                                         levels = c("Observed", "Neighboring"))
-
-p2 <- ggplot(summary_data, aes(x = prior_shop_choice, y = action1TowardsPrevEnd, fill = prior_reward)) +
-  geom_bar(stat = "identity", position = "dodge", colour="black") +
-  labs(title = "SR-based prediction",
-    x = "Previous shop choice on island",
-       y = "Prob. of choosing associated island") +
-  ylim(0,.7) +
-  scale_fill_manual(name = "Non-traversal reward", values=c("#7ECAC9","#325379")) +
-  theme_classic(base_size = 12) + 
-  theme(axis.text.x=element_text(size=11)) + 
-  theme(legend.position = "none")
-
-combined_plot <- p2 + plot_spacer() + p1 + plot_layout(ncol = 3, width=c(1,.2,3))
-ggsave("figures/combined_plot_sr.png", combined_plot, width = 11, height = 11/3)
-
 ```
 
 ``` {r plot sr by age}
@@ -282,7 +178,7 @@ ggplot(summary_data, aes(x = prior_shop_choice, y = action1TowardsPrevEnd, fill 
   labs(title = "Successor Representation effect by age group",
        x = "Previous shop choice on island",
        y = "Prob. of choosing associated island") +
-  scale_fill_manual(name = "Non-traversal reward", values=c("#7ECAC9","#325379")) +
+  scale_fill_manual(name = "Non-traversal reward", values=c("cadetblue1","cadetblue3")) +
   scale_x_discrete(guide = guide_axis(n.dodge = 2), limits=rev) +
   facet_wrap2(~ categorical_age, strip=strip) +
   theme_classic(base_size = 12) + 
